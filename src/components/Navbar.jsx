@@ -21,7 +21,6 @@ import {
 } from '@mui/material';
 import {
   Menu as MenuIcon,
-  Dashboard as DashboardIcon,
   Build as BuildIcon,
   CheckCircle as CheckCircleIcon,
   Assignment as AssignmentIcon,
@@ -29,6 +28,11 @@ import {
   Logout as LogoutIcon,
   People as PeopleIcon,
   History as HistoryIcon,
+  Add as AddIcon,
+  Edit as EditIcon,
+  Visibility as VisibilityIcon,
+  Timeline as MovimientosIcon,
+  CalendarToday as ChecksDiariosIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -97,28 +101,89 @@ export default function Navbar() {
     setDrawerOpen(open);
   };
 
-  // Menú items según rol
-  const menuItems = [
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard', roles: ['ADMIN', 'TECNICO'] },
-    { text: 'Herramientas', icon: <BuildIcon />, path: '/herramientas', roles: ['ADMIN', 'TECNICO'] },
-    { text: 'Controles', icon: <CheckCircleIcon />, path: '/controles', roles: ['ADMIN', 'TECNICO'] },
-    { text: 'Solicitudes', icon: <AssignmentIcon />, path: '/solicitudes', roles: ['ADMIN', 'TECNICO'] },
+  // Menú items para ADMIN
+  const adminMenuItems = [
+    { 
+      text: 'Herramientas', 
+      icon: <BuildIcon />, 
+      path: '/herramientas', 
+      description: 'Agregar, editar, eliminar y sumar herramientas' 
+    },
+    { 
+      text: 'Checks Diarios', 
+      icon: <ChecksDiariosIcon />, 
+      path: '/checks-diarios', 
+      description: 'Control diario de herramientas por zona' 
+    },
+    { 
+      text: 'Controles', 
+      icon: <CheckCircleIcon />, 
+      path: '/controles', 
+      description: 'Revisar controles diarios y semanales de técnicos' 
+    },
+    { 
+      text: 'Solicitudes', 
+      icon: <AssignmentIcon />, 
+      path: '/solicitudes', 
+      description: 'Ver, aceptar o rechazar solicitudes de herramientas' 
+    },
+    { 
+      text: 'Usuarios', 
+      icon: <PeopleIcon />, 
+      path: '/usuarios', 
+      description: 'Gestionar usuarios del sistema' 
+    },
+    { 
+      text: 'Movimientos', 
+      icon: <MovimientosIcon />, 
+      path: '/movimientos', 
+      description: 'Historial de solicitudes, entregas y rechazos' 
+    }
   ];
 
-  const adminItems = [
-    { text: 'Panel Admin', icon: <AdminIcon />, path: '/admin', roles: ['ADMIN'] },
-    { text: 'Usuarios', icon: <PeopleIcon />, path: '/usuarios', roles: ['ADMIN'] },
-    { text: 'Historial', icon: <HistoryIcon />, path: '/historial', roles: ['ADMIN'] },
+  // Menú items para TECNICO
+  const tecnicoMenuItems = [
+    { 
+      text: 'Herramientas', 
+      icon: <VisibilityIcon />, 
+      path: '/herramientas', 
+      description: 'Ver herramientas y filtrar por zona, estado, etc.' 
+    },
+    { 
+      text: 'Checks Diarios', 
+      icon: <ChecksDiariosIcon />, 
+      path: '/checks-diarios', 
+      description: 'Realizar control diario de herramientas por zona' 
+    },
+    { 
+      text: 'Controles', 
+      icon: <CheckCircleIcon />, 
+      path: '/controles', 
+      description: 'Realizar controles diarios y semanales de herramientas' 
+    },
+    { 
+      text: 'Solicitudes', 
+      icon: <AssignmentIcon />, 
+      path: '/solicitudes', 
+      description: 'Pedir herramientas o insumos' 
+    }
   ];
 
-  // Mostrar todos los items mientras carga, o filtrar por rol cuando ya cargó
-  const filteredMenuItems = loading ? menuItems : menuItems.filter(item => 
-    !item.roles || item.roles.includes(userRole)
-  );
+  // Obtener menú items según el rol del usuario
+  const getMenuItems = () => {
+    if (loading) return [];
+    
+    switch (userRole) {
+      case 'ADMIN':
+        return adminMenuItems;
+      case 'TECNICO':
+        return tecnicoMenuItems;
+      default:
+        return [];
+    }
+  };
 
-  const filteredAdminItems = loading ? [] : adminItems.filter(item => 
-    !item.roles || item.roles.includes(userRole)
-  );
+  const currentMenuItems = getMenuItems();
 
   const DrawerContent = () => (
     <Box
@@ -154,7 +219,7 @@ export default function Navbar() {
       </Box>
       <Divider />
       <List>
-        {filteredMenuItems.map((item) => (
+        {currentMenuItems.map((item) => (
           <ListItem
             button
             key={item.text}
@@ -162,28 +227,18 @@ export default function Navbar() {
             selected={location.pathname === item.path}
           >
             <ListItemIcon>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.text} />
+            <ListItemText 
+              primary={item.text} 
+              secondary={item.description}
+              secondaryTypographyProps={{
+                variant: 'caption',
+                color: 'text.secondary',
+                sx: { fontSize: '0.7rem', lineHeight: 1.2 }
+              }}
+            />
           </ListItem>
         ))}
       </List>
-      {userRole === 'ADMIN' && filteredAdminItems.length > 0 && (
-        <>
-          <Divider />
-          <List>
-            {filteredAdminItems.map((item) => (
-              <ListItem
-                button
-                key={item.text}
-                onClick={() => navigate(item.path)}
-                selected={location.pathname === item.path}
-              >
-                <ListItemIcon>{item.icon}</ListItemIcon>
-                <ListItemText primary={item.text} />
-              </ListItem>
-            ))}
-          </List>
-        </>
-      )}
       <Divider />
       <List>
         <ListItem button onClick={handleLogout}>
@@ -216,7 +271,7 @@ export default function Navbar() {
             variant="h6"
             component="div"
             sx={{ flexGrow: 1, cursor: 'pointer' }}
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate(currentMenuItems.length > 0 ? currentMenuItems[0].path : '/herramientas')}
           >
             SILS
           </Typography>
@@ -227,7 +282,7 @@ export default function Navbar() {
                 <CircularProgress size={24} color="inherit" />
               ) : (
                 <>
-                  {filteredMenuItems.map((item) => (
+                  {currentMenuItems.map((item) => (
                     <Button
                       key={item.text}
                       color="inherit"
@@ -240,25 +295,6 @@ export default function Navbar() {
                       {item.text}
                     </Button>
                   ))}
-                  
-                  {userRole === 'ADMIN' && filteredAdminItems.length > 0 && (
-                    <>
-                      <Divider orientation="vertical" flexItem sx={{ mx: 1, bgcolor: 'white' }} />
-                      {filteredAdminItems.map((item) => (
-                        <Button
-                          key={item.text}
-                          color="inherit"
-                          onClick={() => navigate(item.path)}
-                          sx={{
-                            borderBottom: location.pathname === item.path ? 2 : 0,
-                            borderRadius: 0,
-                          }}
-                        >
-                          {item.text}
-                        </Button>
-                      ))}
-                    </>
-                  )}
                 </>
               )}
             </Box>

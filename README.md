@@ -80,7 +80,6 @@ web-app-sils/
 │   │   ├── ProtectedRoute.jsx
 │   │   └── QRScanner.jsx
 │   ├── pages/            # Páginas principales
-│   │   ├── Dashboard.jsx
 │   │   ├── Herramientas.jsx
 │   │   ├── Controles.jsx
 │   │   ├── Solicitudes.jsx

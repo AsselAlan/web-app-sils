@@ -188,17 +188,28 @@ export default function Herramientas() {
     }
 
     try {
-      const { error } = await supabase
+      setError('');
+      setSuccess('');
+      
+      console.log('Intentando eliminar herramienta con ID:', id);
+      
+      const { data, error } = await supabase
         .from('herramientas')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .select(); // Agregamos select() para obtener información sobre el registro eliminado
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error de Supabase:', error);
+        throw error;
+      }
+      
+      console.log('Herramienta eliminada exitosamente:', data);
       setSuccess('Herramienta eliminada correctamente');
       cargarHerramientas();
     } catch (err) {
       console.error('Error al eliminar herramienta:', err);
-      setError('Error al eliminar: ' + err.message);
+      setError(`Error al eliminar: ${err.message || 'Error desconocido'}`);
     }
   };
 

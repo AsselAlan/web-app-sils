@@ -1,13 +1,15 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './auth/Login';
 import Register from './auth/Register';
-import Dashboard from './pages/Dashboard';
+
 import Herramientas from './pages/Herramientas';
 import Controles from './pages/Controles';
 import Solicitudes from './pages/Solicitudes';
+import ChecksDiarios from './pages/ChecksDiarios';
 import Admin from './pages/Admin';
 import Usuarios from './pages/Usuarios';
 import Historial from './pages/Historial';
+import Movimientos from './pages/Movimientos';
 import ProtectedRoute from './components/ProtectedRoute';
 import RoleGuard from './components/RoleGuard';
 
@@ -20,14 +22,6 @@ function App() {
         <Route path="/register" element={<Register />} />
         
         {/* Rutas protegidas - Todos los usuarios */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
         <Route
           path="/herramientas"
           element={
@@ -49,6 +43,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Solicitudes />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/checks-diarios"
+          element={
+            <ProtectedRoute>
+              <ChecksDiarios />
             </ProtectedRoute>
           }
         />
@@ -75,19 +77,19 @@ function App() {
           }
         />
         <Route
-          path="/historial"
+          path="/movimientos"
           element={
             <ProtectedRoute>
               <RoleGuard allowedRoles={['ADMIN']}>
-                <Historial />
+                <Movimientos />
               </RoleGuard>
             </ProtectedRoute>
           }
         />
         
         {/* Redirección por defecto */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<Navigate to="/herramientas" replace />} />
+        <Route path="*" element={<Navigate to="/herramientas" replace />} />
       </Routes>
     </BrowserRouter>
   );

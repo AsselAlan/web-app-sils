@@ -23,7 +23,6 @@ export const getCurrentUserProfile = async () => {
       id: data.id,
       email: data.email,
       role: data.rol, // Nota: 'rol' en la BD se mapea a 'role' en el frontend
-      zona: data.zona,
       created_at: data.created_at,
       updated_at: data.updated_at
     };
@@ -60,7 +59,6 @@ export const getAllUsers = async () => {
       id: user.id,
       email: user.email,
       role: user.rol,
-      zona: user.zona,
       created_at: user.created_at,
       updated_at: user.updated_at
     }));
@@ -73,9 +71,14 @@ export const getAllUsers = async () => {
 // Actualizar rol de usuario (solo admins)
 export const updateUserRole = async (userId, newRole) => {
   try {
+    const updateData = { 
+      rol: newRole, 
+      updated_at: new Date().toISOString() 
+    };
+    
     const { data, error } = await supabase
       .from('usuarios')
-      .update({ rol: newRole, updated_at: new Date().toISOString() })
+      .update(updateData)
       .eq('id', userId)
       .select()
       .single();
@@ -87,7 +90,6 @@ export const updateUserRole = async (userId, newRole) => {
       id: data.id,
       email: data.email,
       role: data.rol,
-      zona: data.zona,
       created_at: data.created_at,
       updated_at: data.updated_at
     };
@@ -97,31 +99,7 @@ export const updateUserRole = async (userId, newRole) => {
   }
 };
 
-// Actualizar zona del usuario
-export const updateUserZona = async (userId, newZona) => {
-  try {
-    const { data, error } = await supabase
-      .from('usuarios')
-      .update({ zona: newZona, updated_at: new Date().toISOString() })
-      .eq('id', userId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    
-    return {
-      id: data.id,
-      email: data.email,
-      role: data.rol,
-      zona: data.zona,
-      created_at: data.created_at,
-      updated_at: data.updated_at
-    };
-  } catch (error) {
-    console.error('Error actualizando zona:', error);
-    throw error;
-  }
-};
+// Función eliminada: updateUserZona - Los usuarios ya no tienen zona asignada
 
 // Suscribirse a cambios en el perfil del usuario
 export const subscribeToProfileChanges = (userId, callback) => {
@@ -138,4 +116,75 @@ export const subscribeToProfileChanges = (userId, callback) => {
       callback
     )
     .subscribe();
+};
+
+// Eliminar usuario (solo admins)
+export const deleteUser = async (userId) => {
+  try {
+    // Primero eliminar de la tabla usuarios
+    const { error: userError } = await supabase
+      .from('usuarios')
+      .delete()
+      .eq('id', userId);
+
+    if (userError) throw userError;
+
+    // Luego eliminar de auth (esto requiere admin service role)
+    const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+    
+    if (authError) {
+      console.warn('No se pudo eliminar de auth (requiere service role):', authError);
+      // No lanzar error aquí ya que el usuario fue eliminado de la tabla
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error eliminando usuario:', error);
+    throw error;
+  }
+};
+
+// Obtener estadísticas de usuarios
+export const getUserStats = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('rol');
+
+    if (error) throw error;
+
+    const stats = {
+      total: data.length,
+      admins: data.filter(u => u.rol === 'ADMIN').length,
+      tecnicos: data.filter(u => u.rol === 'TECNICO').length,
+      sinRol: data.filter(u => !u.rol || u.rol === 'sin_asignar').length
+    };
+
+    return stats;
+  } catch (error) {
+    console.error('Error obteniendo estadísticas:', error);
+    throw error;
+  }
+};
+
+// Verificar si el usuario actual puede editar otro usuario
+export const canEditUser = async (targetUserId) => {
+  try {
+    const currentUser = await getCurrentUserProfile();
+    
+    // Solo admins pueden editar usuarios
+    if (!currentUser || currentUser.role !== 'ADMIN') {
+      return false;
+    }
+    
+    // Un admin no puede editarse a sí mismo para evitar quedarse sin acceso
+    if (currentUser.id === targetUserId) {
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error verificando permisos:', error);
+    return false;
+  }
 };
