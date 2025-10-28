@@ -62,13 +62,9 @@ export default function Herramientas() {
     codigo: '',
     nombre: '',
     descripcion: '',
-    tipo: 'DE_MANO',
-    zona: 'INSTALACIONES',
-    cantidad_total: 1,
-    cantidad_disponible: 1,
+    tipo: 'HERRAMIENTAS_MANO',
+    zona: 'TALLER',
     estado: 'BIEN',
-    puntuacion_estado: 10,
-    ubicacion: '',
   });
 
   useEffect(() => {
@@ -108,11 +104,7 @@ export default function Herramientas() {
         descripcion: herramienta.descripcion || '',
         tipo: herramienta.tipo,
         zona: herramienta.zona,
-        cantidad_total: herramienta.cantidad_total,
-        cantidad_disponible: herramienta.cantidad_disponible,
         estado: herramienta.estado,
-        puntuacion_estado: herramienta.puntuacion_estado || 10,
-        ubicacion: herramienta.ubicacion || '',
       });
     } else {
       setSelectedHerramienta(null);
@@ -120,13 +112,9 @@ export default function Herramientas() {
         codigo: '',
         nombre: '',
         descripcion: '',
-        tipo: 'DE_MANO',
-        zona: 'INSTALACIONES',
-        cantidad_total: 1,
-        cantidad_disponible: 1,
+        tipo: 'HERRAMIENTAS_MANO',
+        zona: 'TALLER',
         estado: 'BIEN',
-        puntuacion_estado: 10,
-        ubicacion: '',
       });
     }
     setOpenDialog(true);
@@ -168,7 +156,8 @@ export default function Herramientas() {
         // Crear
         const { error: insertError } = await supabase
           .from('herramientas')
-          .insert([herramientaData]);
+          .insert([herramientaData])
+          .select();
 
         if (insertError) throw insertError;
         setSuccess('Herramienta creada correctamente');
@@ -215,18 +204,18 @@ export default function Herramientas() {
 
   const getTipoLabel = (tipo) => {
     const labels = {
-      'DE_MANO': 'De Mano',
-      'MAQUINAS': 'Máquinas',
-      'INSUMOS': 'Insumos',
+      'HERRAMIENTAS_MANO': 'De Mano',
+      'MAQUINA': 'Máquinas',
+      'INSUMO': 'Insumos',
     };
     return labels[tipo] || tipo;
   };
 
   const getZonaLabel = (zona) => {
     const labels = {
+      'TALLER': 'Taller',
       'INSTALACIONES': 'Instalaciones',
       'MANTENIMIENTO': 'Mantenimiento',
-      'TALLER': 'Taller',
     };
     return labels[zona] || zona;
   };
@@ -234,9 +223,9 @@ export default function Herramientas() {
   const getEstadoColor = (estado) => {
     const colors = {
       'BIEN': 'success',
-      'REGULAR': 'warning',
+      'REGULAR': 'warning', 
       'MAL': 'error',
-      'FALTANTE': 'default',
+      'ROTO': 'error',
     };
     return colors[estado] || 'default';
   };
@@ -246,7 +235,7 @@ export default function Herramientas() {
       'BIEN': 'Bien',
       'REGULAR': 'Regular',
       'MAL': 'Mal',
-      'FALTANTE': 'Faltante',
+      'ROTO': 'Roto',
     };
     return labels[estado] || estado;
   };
@@ -270,7 +259,7 @@ export default function Herramientas() {
     bien: herramientas.filter(h => h.estado === 'BIEN').length,
     regular: herramientas.filter(h => h.estado === 'REGULAR').length,
     mal: herramientas.filter(h => h.estado === 'MAL').length,
-    faltantes: herramientas.filter(h => h.estado === 'FALTANTE').length,
+    roto: herramientas.filter(h => h.estado === 'ROTO').length,
   };
 
   if (loading) {
@@ -376,10 +365,10 @@ export default function Herramientas() {
             <Card sx={{ bgcolor: 'grey.400' }}>
               <CardContent>
                 <Typography gutterBottom variant="body2">
-                  Faltantes
+                  Roto
                 </Typography>
                 <Typography variant="h4" fontWeight="bold">
-                  {stats.faltantes}
+                  {stats.roto}
                 </Typography>
               </CardContent>
             </Card>
@@ -414,9 +403,9 @@ export default function Herramientas() {
                   onChange={(e) => setFiltros({ ...filtros, tipo: e.target.value })}
                 >
                   <MenuItem value="">Todos</MenuItem>
-                  <MenuItem value="DE_MANO">De Mano</MenuItem>
-                  <MenuItem value="MAQUINAS">Máquinas</MenuItem>
-                  <MenuItem value="INSUMOS">Insumos</MenuItem>
+                  <MenuItem value="HERRAMIENTAS_MANO">De Mano</MenuItem>
+                  <MenuItem value="MAQUINA">Máquinas</MenuItem>
+                  <MenuItem value="INSUMO">Insumos</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -429,9 +418,9 @@ export default function Herramientas() {
                   onChange={(e) => setFiltros({ ...filtros, zona: e.target.value })}
                 >
                   <MenuItem value="">Todas</MenuItem>
+                  <MenuItem value="TALLER">Taller</MenuItem>
                   <MenuItem value="INSTALACIONES">Instalaciones</MenuItem>
                   <MenuItem value="MANTENIMIENTO">Mantenimiento</MenuItem>
-                  <MenuItem value="TALLER">Taller</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -447,7 +436,7 @@ export default function Herramientas() {
                   <MenuItem value="BIEN">Bien</MenuItem>
                   <MenuItem value="REGULAR">Regular</MenuItem>
                   <MenuItem value="MAL">Mal</MenuItem>
-                  <MenuItem value="FALTANTE">Faltante</MenuItem>
+                  <MenuItem value="ROTO">Roto</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -463,9 +452,7 @@ export default function Herramientas() {
                 <TableCell>Nombre</TableCell>
                 <TableCell>Tipo</TableCell>
                 <TableCell>Zona</TableCell>
-                <TableCell align="center">Cantidad</TableCell>
                 <TableCell>Estado</TableCell>
-                <TableCell align="center">Puntuación</TableCell>
                 {userProfile?.role === 'ADMIN' && (
                   <TableCell align="center">Acciones</TableCell>
                 )}
@@ -474,7 +461,7 @@ export default function Herramientas() {
             <TableBody>
               {herramientasFiltradas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
+                  <TableCell colSpan={userProfile?.role === 'ADMIN' ? 6 : 5} align="center">
                     <Typography variant="body2" color="text.secondary">
                       No hay herramientas que coincidan con los filtros
                     </Typography>
@@ -500,34 +487,12 @@ export default function Herramientas() {
                     <TableCell>
                       <Chip label={getZonaLabel(herramienta.zona)} size="small" color="primary" />
                     </TableCell>
-                    <TableCell align="center">
-                      {herramienta.cantidad_disponible} / {herramienta.cantidad_total}
-                    </TableCell>
                     <TableCell>
                       <Chip
                         label={getEstadoLabel(herramienta.estado)}
                         size="small"
                         color={getEstadoColor(herramienta.estado)}
                       />
-                    </TableCell>
-                    <TableCell align="center">
-                      {herramienta.puntuacion_estado ? (
-                        <Chip
-                          label={herramienta.puntuacion_estado}
-                          size="small"
-                          color={
-                            herramienta.puntuacion_estado >= 7
-                              ? 'success'
-                              : herramienta.puntuacion_estado >= 5
-                              ? 'warning'
-                              : 'error'
-                          }
-                        />
-                      ) : (
-                        <Typography variant="caption" color="text.secondary">
-                          N/A
-                        </Typography>
-                      )}
                     </TableCell>
                     {userProfile?.role === 'ADMIN' && (
                       <TableCell align="center">
@@ -598,9 +563,9 @@ export default function Herramientas() {
                       label="Tipo"
                       onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
                     >
-                      <MenuItem value="DE_MANO">De Mano</MenuItem>
-                      <MenuItem value="MAQUINAS">Máquinas</MenuItem>
-                      <MenuItem value="INSUMOS">Insumos</MenuItem>
+                      <MenuItem value="HERRAMIENTAS_MANO">De Mano</MenuItem>
+                      <MenuItem value="MAQUINA">Máquinas</MenuItem>
+                      <MenuItem value="INSUMO">Insumos</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -612,9 +577,9 @@ export default function Herramientas() {
                       label="Zona"
                       onChange={(e) => setFormData({ ...formData, zona: e.target.value })}
                     >
+                      <MenuItem value="TALLER">Taller</MenuItem>
                       <MenuItem value="INSTALACIONES">Instalaciones</MenuItem>
                       <MenuItem value="MANTENIMIENTO">Mantenimiento</MenuItem>
-                      <MenuItem value="TALLER">Taller</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -629,47 +594,9 @@ export default function Herramientas() {
                       <MenuItem value="BIEN">Bien</MenuItem>
                       <MenuItem value="REGULAR">Regular</MenuItem>
                       <MenuItem value="MAL">Mal</MenuItem>
-                      <MenuItem value="FALTANTE">Faltante</MenuItem>
+                      <MenuItem value="ROTO">Roto</MenuItem>
                     </Select>
                   </FormControl>
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    label="Cantidad Total"
-                    type="number"
-                    value={formData.cantidad_total}
-                    onChange={(e) => setFormData({ ...formData, cantidad_total: parseInt(e.target.value) })}
-                    fullWidth
-                    inputProps={{ min: 1 }}
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    label="Cantidad Disponible"
-                    type="number"
-                    value={formData.cantidad_disponible}
-                    onChange={(e) => setFormData({ ...formData, cantidad_disponible: parseInt(e.target.value) })}
-                    fullWidth
-                    inputProps={{ min: 0 }}
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    label="Puntuación (1-10)"
-                    type="number"
-                    value={formData.puntuacion_estado}
-                    onChange={(e) => setFormData({ ...formData, puntuacion_estado: parseInt(e.target.value) })}
-                    fullWidth
-                    inputProps={{ min: 1, max: 10 }}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    label="Ubicación"
-                    value={formData.ubicacion}
-                    onChange={(e) => setFormData({ ...formData, ubicacion: e.target.value })}
-                    fullWidth
-                  />
                 </Grid>
               </Grid>
             </Box>

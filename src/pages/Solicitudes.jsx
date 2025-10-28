@@ -28,11 +28,15 @@ import {
   CardContent,
   Grid,
   Tooltip,
-  DialogContentText,
   Autocomplete,
   Tab,
   Tabs,
   Fab,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  FormLabel,
+  Divider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -45,11 +49,36 @@ import {
   Warning as WarningIcon,
   CheckCircle as CompleteIcon,
   LocalShipping as DeliverIcon,
+  Construction as ToolIcon,
+  Visibility as ViewIcon,
 } from '@mui/icons-material';
 import Navbar from '../components/Navbar';
 import { supabase } from '../lib/supabase';
 import { getCurrentUserProfile } from '../services/auth';
-import { ESTADOS_HERRAMIENTAS } from '../types/constants';
+
+const ZONAS = {
+  TALLER: 'TALLER',
+  INSTALACIONES: 'INSTALACIONES',
+  MANTENIMIENTO: 'MANTENIMIENTO'
+};
+
+const TIPOS_HERRAMIENTA = {
+  DE_MANO: 'DE_MANO',
+  INSUMO: 'INSUMO',
+  MAQUINA: 'MAQUINA'
+};
+
+const PRIORIDADES = {
+  URGENTE: { valor: 3, texto: 'URGENTE', color: 'error' },
+  NECESARIA: { valor: 2, texto: 'NECESARIA', color: 'warning' },
+  UTIL: { valor: 1, texto: 'UTIL', color: 'info' }
+};
+
+const TIPOS_SOLICITUD = {
+  NUEVA: 'NUEVA',
+  REPARACION: 'REPARACION',
+  CAMBIO: 'CAMBIO'
+};
 
 export default function Solicitudes() {
   const [solicitudes, setSolicitudes] = useState([]);
@@ -58,23 +87,38 @@ export default function Solicitudes() {
   const [currentUser, setCurrentUser] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [openAdminDialog, setOpenAdminDialog] = useState(false);
+  const [openViewDialog, setOpenViewDialog] = useState(false);
   const [selectedSolicitud, setSelectedSolicitud] = useState(null);
   const [tabValue, setTabValue] = useState(0);
+  
+  // Formulario de nueva solicitud
   const [formData, setFormData] = useState({
-    tipo_solicitud: 'NUEVA_HERRAMIENTA',
+    tipo_solicitud: TIPOS_SOLICITUD.NUEVA,
+    zona: '',
     prioridad: 'NECESARIA',
+    
+    // Campos para nueva herramienta
     nombre_herramienta: '',
     tipo_herramienta: '',
-    marca: '',
     descripcion_uso: '',
+    marca: '',
+    
+    // Campos para reparación/cambio
     herramienta_id: null,
-    comentarios: ''
+    falla: '',
+    
+    comentario_adicional: ''
   });
+
+  // Respuesta del admin
   const [adminResponse, setAdminResponse] = useState({
-    accion: 'APROBAR',
+    accion: 'PENDIENTE', // APROBADA, RECHAZADA, PENDIENTE
     respuesta: '',
-    herramienta_nueva_codigo: ''
+    crear_herramienta: false,
+    nuevo_codigo: '',
+    nueva_descripcion: ''
   });
+
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -82,20 +126,25 @@ export default function Solicitudes() {
     cargarDatos();
   }, []);
 
+  // Cargar herramientas cuando cambia la zona
+  useEffect(() => {
+    if (formData.zona && (formData.tipo_solicitud === TIPOS_SOLICITUD.REPARACION || formData.tipo_solicitud === TIPOS_SOLICITUD.CAMBIO)) {
+      cargarHerramientasPorZona(formData.zona);
+    }
+  }, [formData.zona, formData.tipo_solicitud]);
+
   const cargarDatos = async () => {
     try {
       setLoading(true);
       setError('');
       
-      const [userProfile, solicitudesData, herramientasData] = await Promise.all([
+      const [userProfile, solicitudesData] = await Promise.all([
         getCurrentUserProfile(),
-        cargarSolicitudes(),
-        cargarHerramientasMalEstado()
+        cargarSolicitudes()
       ]);
       
       setCurrentUser(userProfile);
       setSolicitudes(solicitudesData || []);
-      setHerramientasMalEstado(herramientasData || []);
     } catch (err) {
       console.error('Error al cargar datos:', err);
       setError('Error al cargar la información');
@@ -111,7 +160,7 @@ export default function Solicitudes() {
         *,
         usuarios:solicitado_por(email),
         admin:revisado_por(email),
-        herramientas:herramienta_id(nombre, codigo, estado)
+        herramientas:herramienta_id(nombre, codigo, estado, zona)
       `)
       .order('created_at', { ascending: false });
 
@@ -122,31 +171,39 @@ export default function Solicitudes() {
     return data;
   };
 
-  const cargarHerramientasMalEstado = async () => {
-    const { data, error } = await supabase
-      .from('herramientas')
-      .select('id, nombre, codigo, estado, puntuacion_estado')
-      .in('estado', [ESTADOS_HERRAMIENTAS.MAL, ESTADOS_HERRAMIENTAS.FALTANTE])
-      .order('puntuacion_estado', { ascending: true });
+  const cargarHerramientasPorZona = async (zona) => {
+    try {
+      // Usar la función SQL creada para obtener herramientas en mal estado por zona
+      const { data, error } = await supabase
+        .rpc('get_herramientas_mal_estado_por_zona', { zona_param: zona });
 
-    if (error) {
-      console.error('Error al cargar herramientas:', error);
-      throw error;
+      if (error) {
+        console.error('Error al cargar herramientas por zona:', error);
+        setHerramientasMalEstado([]);
+        return;
+      }
+      
+      setHerramientasMalEstado(data || []);
+    } catch (err) {
+      console.error('Error al cargar herramientas por zona:', err);
+      setHerramientasMalEstado([]);
     }
-    return data;
   };
 
   const handleOpenDialog = () => {
     setFormData({
-      tipo_solicitud: 'NUEVA_HERRAMIENTA',
+      tipo_solicitud: TIPOS_SOLICITUD.NUEVA,
+      zona: '',
       prioridad: 'NECESARIA',
       nombre_herramienta: '',
       tipo_herramienta: '',
-      marca: '',
       descripcion_uso: '',
+      marca: '',
       herramienta_id: null,
-      comentarios: ''
+      falla: '',
+      comentario_adicional: ''
     });
+    setHerramientasMalEstado([]);
     setOpenDialog(true);
   };
 
@@ -155,12 +212,14 @@ export default function Solicitudes() {
     setError('');
   };
 
-  const handleOpenAdminDialog = (solicitud) => {
+  const handleOpenAdminDialog = (solicitud, accionPredeterminada = 'PENDIENTE') => {
     setSelectedSolicitud(solicitud);
     setAdminResponse({
-      accion: 'APROBAR',
+      accion: accionPredeterminada,
       respuesta: '',
-      herramienta_nueva_codigo: ''
+      crear_herramienta: false,
+      nuevo_codigo: '',
+      nueva_descripcion: ''
     });
     setOpenAdminDialog(true);
   };
@@ -169,6 +228,41 @@ export default function Solicitudes() {
     setOpenAdminDialog(false);
     setSelectedSolicitud(null);
     setError('');
+  };
+
+  const handleOpenViewDialog = (solicitud) => {
+    setSelectedSolicitud(solicitud);
+    setOpenViewDialog(true);
+  };
+
+  const handleCloseViewDialog = () => {
+    setOpenViewDialog(false);
+    setSelectedSolicitud(null);
+  };
+
+  const validarFormulario = () => {
+    const { tipo_solicitud, zona, prioridad, nombre_herramienta, tipo_herramienta, descripcion_uso, herramienta_id, falla } = formData;
+
+    // Validaciones comunes
+    if (!zona || !prioridad) {
+      return 'Debe seleccionar zona y prioridad';
+    }
+
+    // Validaciones específicas por tipo
+    if (tipo_solicitud === TIPOS_SOLICITUD.NUEVA) {
+      if (!nombre_herramienta || !tipo_herramienta || !descripcion_uso) {
+        return 'Complete nombre, tipo y descripción de uso para nueva herramienta';
+      }
+    } else if (tipo_solicitud === TIPOS_SOLICITUD.REPARACION || tipo_solicitud === TIPOS_SOLICITUD.CAMBIO) {
+      if (!herramienta_id) {
+        return 'Seleccione una herramienta';
+      }
+      if (!falla) {
+        return 'Describa la falla encontrada';
+      }
+    }
+
+    return null;
   };
 
   const handleSubmitSolicitud = async () => {
@@ -181,35 +275,36 @@ export default function Solicitudes() {
         return;
       }
 
-      // Validaciones según tipo de solicitud
-      if (formData.tipo_solicitud === 'NUEVA_HERRAMIENTA') {
-        if (!formData.nombre_herramienta || !formData.tipo_herramienta || !formData.descripcion_uso) {
-          setError('Complete todos los campos requeridos para nueva herramienta');
-          return;
-        }
-      } else if (formData.tipo_solicitud === 'REPARACION' || formData.tipo_solicitud === 'CAMBIO') {
-        if (!formData.herramienta_id) {
-          setError('Seleccione una herramienta para reparación o cambio');
-          return;
-        }
+      const errorValidacion = validarFormulario();
+      if (errorValidacion) {
+        setError(errorValidacion);
+        return;
       }
 
       const solicitudData = {
         tipo: formData.tipo_solicitud,
-        prioridad: parseInt(getPrioridadNumero(formData.prioridad)),
-        motivo: formData.comentarios,
+        zona: formData.zona,
+        prioridad: PRIORIDADES[formData.prioridad].valor,
         solicitado_por: currentUser.id,
-        fecha_solicitud: new Date().toISOString(),
         estado: 'PENDIENTE'
       };
 
-      // Agregar campos específicos según tipo
-      if (formData.tipo_solicitud === 'NUEVA_HERRAMIENTA') {
+      // Campos específicos según tipo de solicitud
+      if (formData.tipo_solicitud === TIPOS_SOLICITUD.NUEVA) {
         solicitudData.herramienta_nueva_nombre = formData.nombre_herramienta;
         solicitudData.herramienta_nueva_tipo = formData.tipo_herramienta;
-        // Agregar más campos si necesario
+        solicitudData.descripcion_uso = formData.descripcion_uso;
+        solicitudData.marca = formData.marca || null;
+        solicitudData.motivo = `Nueva herramienta: ${formData.nombre_herramienta}`;
       } else {
         solicitudData.herramienta_id = formData.herramienta_id;
+        solicitudData.falla = formData.falla;
+        solicitudData.motivo = `${formData.tipo_solicitud}: ${formData.falla}`;
+      }
+
+      // Comentario adicional
+      if (formData.comentario_adicional) {
+        solicitudData.comentario_adicional = formData.comentario_adicional;
       }
 
       const { error: insertError } = await supabase
@@ -232,10 +327,13 @@ export default function Solicitudes() {
       setError('');
       setSuccess('');
 
-      if (!selectedSolicitud) return;
+      if (!selectedSolicitud || adminResponse.accion === 'PENDIENTE') {
+        setError('Seleccione una acción');
+        return;
+      }
 
       const updateData = {
-        estado: adminResponse.accion === 'APROBAR' ? 'APROBADA' : 'RECHAZADA',
+        estado: adminResponse.accion,
         revisado_por: currentUser.id,
         fecha_revision: new Date().toISOString(),
         comentario_revision: adminResponse.respuesta
@@ -248,32 +346,12 @@ export default function Solicitudes() {
 
       if (updateError) throw updateError;
 
-      // Si es aprobación de nueva herramienta, crear la herramienta
-      if (adminResponse.accion === 'APROBAR' && selectedSolicitud.tipo === 'NUEVA_HERRAMIENTA' && adminResponse.herramienta_nueva_codigo) {
-        const herramientaData = {
-          codigo: adminResponse.herramienta_nueva_codigo,
-          nombre: selectedSolicitud.herramienta_nueva_nombre,
-          tipo: selectedSolicitud.herramienta_nueva_tipo || 'MANUAL',
-          zona: 'INSTALACIONES', // Por defecto
-          cantidad_total: 1,
-          cantidad_disponible: 0, // Inicialmente no disponible hasta entrega
-          estado: 'NUEVO',
-          puntuacion_estado: 10,
-          descripcion: `Herramienta solicitada por ${selectedSolicitud.usuarios?.email}`,
-          created_by: currentUser.id
-        };
-
-        const { error: herramientaError } = await supabase
-          .from('herramientas')
-          .insert(herramientaData);
-
-        if (herramientaError) {
-          console.error('Error al crear herramienta:', herramientaError);
-          // No lanzar error aquí para no cancelar la aprobación
-        }
+      // Lógica específica para aprobaciones
+      if (adminResponse.accion === 'APROBADA') {
+        await procesarAprobacion();
       }
 
-      setSuccess(`Solicitud ${adminResponse.accion === 'APROBAR' ? 'aprobada' : 'rechazada'} correctamente`);
+      setSuccess(`Solicitud ${adminResponse.accion.toLowerCase()} correctamente`);
       handleCloseAdminDialog();
       cargarDatos();
     } catch (err) {
@@ -282,42 +360,73 @@ export default function Solicitudes() {
     }
   };
 
-  const handleMarcarEntregada = async (solicitudId) => {
-    try {
-      const { error } = await supabase
-        .from('solicitudes')
+  const procesarAprobacion = async () => {
+    const { tipo } = selectedSolicitud;
+
+    if (tipo === TIPOS_SOLICITUD.NUEVA && adminResponse.crear_herramienta) {
+      // Crear nueva herramienta
+      const herramientaData = {
+        codigo: adminResponse.nuevo_codigo,
+        nombre: selectedSolicitud.herramienta_nueva_nombre,
+        tipo: selectedSolicitud.herramienta_nueva_tipo,
+        zona: selectedSolicitud.zona,
+        cantidad_total: 1,
+        cantidad_disponible: 0,
+        estado: 'BIEN',
+        puntuacion_estado: 10,
+        descripcion: adminResponse.nueva_descripcion || selectedSolicitud.descripcion_uso,
+        created_by: currentUser.id
+      };
+
+      const { error: herramientaError } = await supabase
+        .from('herramientas')
+        .insert(herramientaData);
+
+      if (herramientaError) {
+        console.error('Error al crear herramienta:', herramientaError);
+        throw new Error('Error al crear la herramienta asociada');
+      }
+    } else if (tipo === TIPOS_SOLICITUD.CAMBIO && adminResponse.crear_herramienta) {
+      // Para cambios, crear nueva herramienta de reemplazo
+      const herramientaOriginal = selectedSolicitud.herramientas;
+      const herramientaData = {
+        codigo: adminResponse.nuevo_codigo,
+        nombre: herramientaOriginal.nombre,
+        tipo: herramientaOriginal.tipo || 'DE_MANO',
+        zona: selectedSolicitud.zona,
+        cantidad_total: 1,
+        cantidad_disponible: 0,
+        estado: 'BIEN',
+        puntuacion_estado: 10,
+        descripcion: adminResponse.nueva_descripcion || `Reemplazo de ${herramientaOriginal.codigo}`,
+        created_by: currentUser.id
+      };
+
+      const { error: herramientaError } = await supabase
+        .from('herramientas')
+        .insert(herramientaData);
+
+      if (herramientaError) {
+        console.error('Error al crear herramienta de reemplazo:', herramientaError);
+        throw new Error('Error al crear la herramienta de reemplazo');
+      }
+
+      // Marcar la herramienta original como dada de baja
+      await supabase
+        .from('herramientas')
         .update({ 
-          estado: 'ENTREGADA',
-          fecha_revision: new Date().toISOString()
+          estado: 'FALTANTE',
+          puntuacion_estado: 1,
+          updated_at: new Date().toISOString()
         })
-        .eq('id', solicitudId);
-
-      if (error) throw error;
-
-      setSuccess('Solicitud marcada como entregada');
-      cargarDatos();
-    } catch (err) {
-      console.error('Error al marcar como entregada:', err);
-      setError('Error al marcar como entregada: ' + err.message);
+        .eq('id', selectedSolicitud.herramienta_id);
     }
+    // Para reparaciones, el estado se actualiza automáticamente por el trigger
   };
 
-  const getPrioridadNumero = (prioridad) => {
-    switch (prioridad) {
-      case 'URGENTE': return 3;
-      case 'NECESARIA': return 2;
-      case 'UTIL': return 1;
-      default: return 2;
-    }
-  };
-
-  const getPrioridadTexto = (numero) => {
-    switch (numero) {
-      case 3: return 'URGENTE';
-      case 2: return 'NECESARIA';
-      case 1: return 'UTIL';
-      default: return 'NECESARIA';
-    }
+  const getPrioridadInfo = (valor) => {
+    const prioridad = Object.values(PRIORIDADES).find(p => p.valor === valor);
+    return prioridad || PRIORIDADES.NECESARIA;
   };
 
   const getEstadoColor = (estado) => {
@@ -325,44 +434,44 @@ export default function Solicitudes() {
       case 'PENDIENTE': return 'warning';
       case 'APROBADA': return 'success';
       case 'RECHAZADA': return 'error';
-      case 'ENTREGADA': return 'info';
-      case 'COMPLETADA': return 'primary';
-      default: return 'default';
-    }
-  };
-
-  const getPrioridadColor = (prioridad) => {
-    switch (prioridad) {
-      case 'URGENTE': return 'error';
-      case 'NECESARIA': return 'warning';
-      case 'UTIL': return 'info';
       default: return 'default';
     }
   };
 
   const getTipoIcon = (tipo) => {
     switch (tipo) {
-      case 'NUEVA_HERRAMIENTA': return <AddIcon />;
-      case 'REPARACION': return <RepairIcon />;
-      case 'CAMBIO': return <ChangeIcon />;
+      case TIPOS_SOLICITUD.NUEVA: return <AddIcon />;
+      case TIPOS_SOLICITUD.REPARACION: return <RepairIcon />;
+      case TIPOS_SOLICITUD.CAMBIO: return <ChangeIcon />;
       default: return <RequestIcon />;
     }
   };
 
+  const getTipoTexto = (tipo) => {
+    switch (tipo) {
+      case TIPOS_SOLICITUD.NUEVA: return 'Nueva Herramienta';
+      case TIPOS_SOLICITUD.REPARACION: return 'Reparación';
+      case TIPOS_SOLICITUD.CAMBIO: return 'Cambio';
+      default: return tipo;
+    }
+  };
+
+  // Filtrar solicitudes según el rol del usuario
   const filteredSolicitudes = solicitudes.filter(s => {
     if (currentUser?.role === 'ADMIN') return true;
     return s.solicitado_por === currentUser?.id;
   });
 
+  // Separar por estado
   const solicitudesPendientes = filteredSolicitudes.filter(s => s.estado === 'PENDIENTE');
   const solicitudesAprobadas = filteredSolicitudes.filter(s => s.estado === 'APROBADA');
-  const solicitudesEntregadas = filteredSolicitudes.filter(s => s.estado === 'ENTREGADA');
+  const solicitudesRechazadas = filteredSolicitudes.filter(s => s.estado === 'RECHAZADA');
 
   const getSolicitudesByTab = () => {
     switch (tabValue) {
       case 0: return solicitudesPendientes;
       case 1: return solicitudesAprobadas;
-      case 2: return solicitudesEntregadas;
+      case 2: return solicitudesRechazadas;
       default: return filteredSolicitudes;
     }
   };
@@ -400,7 +509,7 @@ export default function Solicitudes() {
           </Alert>
         )}
 
-        {/* Estadísticas rápidas */}
+        {/* Estadísticas */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} sm={4}>
             <Card>
@@ -440,13 +549,13 @@ export default function Solicitudes() {
             <Card>
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <CompleteIcon color="info" sx={{ fontSize: 40 }} />
+                  <RejectIcon color="error" sx={{ fontSize: 40 }} />
                   <Box>
                     <Typography variant="h4" component="div">
-                      {solicitudesEntregadas.length}
+                      {solicitudesRechazadas.length}
                     </Typography>
                     <Typography color="text.secondary">
-                      Entregadas
+                      Rechazadas
                     </Typography>
                   </Box>
                 </Box>
@@ -465,7 +574,7 @@ export default function Solicitudes() {
           >
             <Tab label={`Pendientes (${solicitudesPendientes.length})`} />
             <Tab label={`Aprobadas (${solicitudesAprobadas.length})`} />
-            <Tab label={`Entregadas (${solicitudesEntregadas.length})`} />
+            <Tab label={`Rechazadas (${solicitudesRechazadas.length})`} />
           </Tabs>
         </Paper>
 
@@ -476,17 +585,17 @@ export default function Solicitudes() {
               <TableRow>
                 <TableCell>Tipo</TableCell>
                 <TableCell>Descripción</TableCell>
-                {currentUser?.role === 'ADMIN' && <TableCell>Solicitante</TableCell>}
+                <TableCell>Zona</TableCell>
+                <TableCell>Solicitante</TableCell>
                 <TableCell>Prioridad</TableCell>
                 <TableCell>Estado</TableCell>
                 <TableCell>Fecha</TableCell>
-                <TableCell align="center">Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {getSolicitudesByTab().length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={currentUser?.role === 'ADMIN' ? 7 : 6} align="center">
+                  <TableCell colSpan={7} align="center">
                     <Typography variant="body2" color="text.secondary">
                       No hay solicitudes en esta categoría
                     </Typography>
@@ -494,19 +603,27 @@ export default function Solicitudes() {
                 </TableRow>
               ) : (
                 getSolicitudesByTab().map((solicitud) => (
-                  <TableRow key={solicitud.id}>
+                  <TableRow 
+                    key={solicitud.id}
+                    onClick={() => handleOpenViewDialog(solicitud)}
+                    sx={{ 
+                      cursor: 'pointer',
+                      '&:hover': {
+                        backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                      }
+                    }}
+                  >
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {getTipoIcon(solicitud.tipo)}
                         <Typography variant="body2">
-                          {solicitud.tipo === 'NUEVA_HERRAMIENTA' ? 'Nueva' : 
-                           solicitud.tipo === 'REPARACION' ? 'Reparación' : 'Cambio'}
+                          {getTipoTexto(solicitud.tipo)}
                         </Typography>
                       </Box>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                        {solicitud.tipo === 'NUEVA_HERRAMIENTA' 
+                        {solicitud.tipo === TIPOS_SOLICITUD.NUEVA 
                           ? solicitud.herramienta_nueva_nombre 
                           : solicitud.herramientas?.nombre}
                       </Typography>
@@ -514,13 +631,18 @@ export default function Solicitudes() {
                         {solicitud.motivo}
                       </Typography>
                     </TableCell>
-                    {currentUser?.role === 'ADMIN' && (
-                      <TableCell>{solicitud.usuarios?.email}</TableCell>
-                    )}
+                    <TableCell>
+                      <Chip label={solicitud.zona} size="small" variant="outlined" />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {solicitud.usuarios?.email}
+                      </Typography>
+                    </TableCell>
                     <TableCell>
                       <Chip
-                        label={getPrioridadTexto(solicitud.prioridad)}
-                        color={getPrioridadColor(getPrioridadTexto(solicitud.prioridad))}
+                        label={getPrioridadInfo(solicitud.prioridad).texto}
+                        color={getPrioridadInfo(solicitud.prioridad).color}
                         size="small"
                       />
                     </TableCell>
@@ -532,33 +654,7 @@ export default function Solicitudes() {
                       />
                     </TableCell>
                     <TableCell>
-                      {new Date(solicitud.created_at || solicitud.fecha_solicitud).toLocaleDateString('es-ES')}
-                    </TableCell>
-                    <TableCell align="center">
-                      <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                        {currentUser?.role === 'ADMIN' && solicitud.estado === 'PENDIENTE' && (
-                          <Tooltip title="Revisar solicitud">
-                            <IconButton
-                              color="primary"
-                              size="small"
-                              onClick={() => handleOpenAdminDialog(solicitud)}
-                            >
-                              <EditIcon />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                        {currentUser?.role === 'ADMIN' && solicitud.estado === 'APROBADA' && (
-                          <Tooltip title="Marcar como entregada">
-                            <IconButton
-                              color="success"
-                              size="small"
-                              onClick={() => handleMarcarEntregada(solicitud.id)}
-                            >
-                              <DeliverIcon />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                      </Box>
+                      {new Date(solicitud.created_at).toLocaleDateString('es-ES')}
                     </TableCell>
                   </TableRow>
                 ))
@@ -567,64 +663,106 @@ export default function Solicitudes() {
           </Table>
         </TableContainer>
 
-        {/* FAB para crear solicitud (solo técnicos) */}
-        {currentUser?.role === 'TECNICO' && (
-          <Fab
-            color="primary"
-            aria-label="add"
-            sx={{ position: 'fixed', bottom: 16, right: 16 }}
-            onClick={handleOpenDialog}
-          >
-            <AddIcon />
-          </Fab>
-        )}
+        {/* FAB para crear solicitud */}
+        <Fab
+          color="primary"
+          aria-label="add"
+          sx={{ position: 'fixed', bottom: 16, right: 16 }}
+          onClick={handleOpenDialog}
+        >
+          <AddIcon />
+        </Fab>
 
         {/* Dialog para crear solicitud */}
         <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-          <DialogTitle>Nueva Solicitud de Herramienta</DialogTitle>
+          <DialogTitle>Nueva Solicitud</DialogTitle>
           <DialogContent>
-            <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <FormControl fullWidth>
-                <InputLabel>Tipo de Solicitud</InputLabel>
-                <Select
+            <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
+              
+              {/* Tipo de solicitud */}
+              <FormControl component="fieldset">
+                <FormLabel component="legend">Tipo de Solicitud</FormLabel>
+                <RadioGroup
+                  row
                   value={formData.tipo_solicitud}
-                  label="Tipo de Solicitud"
-                  onChange={(e) => setFormData({ ...formData, tipo_solicitud: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, tipo_solicitud: e.target.value, herramienta_id: null })}
                 >
-                  <MenuItem value="NUEVA_HERRAMIENTA">Nueva Herramienta</MenuItem>
-                  <MenuItem value="REPARACION">Reparación</MenuItem>
-                  <MenuItem value="CAMBIO">Cambio por Defecto</MenuItem>
-                </Select>
+                  <FormControlLabel value={TIPOS_SOLICITUD.NUEVA} control={<Radio />} label="Nueva Herramienta" />
+                  <FormControlLabel value={TIPOS_SOLICITUD.REPARACION} control={<Radio />} label="Reparación" />
+                  <FormControlLabel value={TIPOS_SOLICITUD.CAMBIO} control={<Radio />} label="Cambio" />
+                </RadioGroup>
               </FormControl>
 
-              <FormControl fullWidth>
-                <InputLabel>Prioridad</InputLabel>
-                <Select
-                  value={formData.prioridad}
-                  label="Prioridad"
-                  onChange={(e) => setFormData({ ...formData, prioridad: e.target.value })}
-                >
-                  <MenuItem value="URGENTE">Urgente</MenuItem>
-                  <MenuItem value="NECESARIA">Necesaria</MenuItem>
-                  <MenuItem value="UTIL">Útil</MenuItem>
-                </Select>
-              </FormControl>
+              {/* Campos comunes */}
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Zona</InputLabel>
+                    <Select
+                      value={formData.zona}
+                      label="Zona"
+                      onChange={(e) => setFormData({ ...formData, zona: e.target.value, herramienta_id: null })}
+                    >
+                      <MenuItem value={ZONAS.TALLER}>Taller</MenuItem>
+                      <MenuItem value={ZONAS.INSTALACIONES}>Instalaciones</MenuItem>
+                      <MenuItem value={ZONAS.MANTENIMIENTO}>Mantenimiento</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Prioridad</InputLabel>
+                    <Select
+                      value={formData.prioridad}
+                      label="Prioridad"
+                      onChange={(e) => setFormData({ ...formData, prioridad: e.target.value })}
+                    >
+                      <MenuItem value="URGENTE">Urgente</MenuItem>
+                      <MenuItem value="NECESARIA">Necesaria</MenuItem>
+                      <MenuItem value="UTIL">Útil</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
 
-              {formData.tipo_solicitud === 'NUEVA_HERRAMIENTA' ? (
+              {/* Campos específicos para nueva herramienta */}
+              {formData.tipo_solicitud === TIPOS_SOLICITUD.NUEVA && (
                 <>
+                  <Divider>Nueva Herramienta</Divider>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        required
+                        label="Nombre"
+                        value={formData.nombre_herramienta}
+                        onChange={(e) => setFormData({ ...formData, nombre_herramienta: e.target.value })}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <FormControl fullWidth required>
+                        <InputLabel>Tipo</InputLabel>
+                        <Select
+                          value={formData.tipo_herramienta}
+                          label="Tipo"
+                          onChange={(e) => setFormData({ ...formData, tipo_herramienta: e.target.value })}
+                        >
+                          <MenuItem value={TIPOS_HERRAMIENTA.DE_MANO}>De Mano</MenuItem>
+                          <MenuItem value={TIPOS_HERRAMIENTA.INSUMO}>Insumo</MenuItem>
+                          <MenuItem value={TIPOS_HERRAMIENTA.MAQUINA}>Máquina</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                  </Grid>
                   <TextField
                     fullWidth
-                    label="Nombre de la Herramienta"
-                    value={formData.nombre_herramienta}
-                    onChange={(e) => setFormData({ ...formData, nombre_herramienta: e.target.value })}
                     required
-                  />
-                  <TextField
-                    fullWidth
-                    label="Tipo/Categoría"
-                    value={formData.tipo_herramienta}
-                    onChange={(e) => setFormData({ ...formData, tipo_herramienta: e.target.value })}
-                    required
+                    label="Descripción de Uso"
+                    multiline
+                    rows={3}
+                    value={formData.descripcion_uso}
+                    onChange={(e) => setFormData({ ...formData, descripcion_uso: e.target.value })}
+                    placeholder="Describa para qué necesita esta herramienta y cómo la va a usar"
                   />
                   <TextField
                     fullWidth
@@ -632,40 +770,58 @@ export default function Solicitudes() {
                     value={formData.marca}
                     onChange={(e) => setFormData({ ...formData, marca: e.target.value })}
                   />
-                  <TextField
-                    fullWidth
-                    label="Descripción de Uso"
-                    multiline
-                    rows={3}
-                    value={formData.descripcion_uso}
-                    onChange={(e) => setFormData({ ...formData, descripcion_uso: e.target.value })}
-                    required
-                    placeholder="Describa para qué necesita esta herramienta y cómo la va a usar"
-                  />
                 </>
-              ) : (
-                <Autocomplete
-                  options={herramientasMalEstado}
-                  getOptionLabel={(option) => `${option.codigo} - ${option.nombre} (${option.estado})`}
-                  value={herramientasMalEstado.find(h => h.id === formData.herramienta_id) || null}
-                  onChange={(e, newValue) => setFormData({ ...formData, herramienta_id: newValue?.id || null })}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Seleccionar Herramienta en Mal Estado"
-                      required
-                    />
-                  )}
-                />
               )}
 
+              {/* Campos específicos para reparación/cambio */}
+              {(formData.tipo_solicitud === TIPOS_SOLICITUD.REPARACION || formData.tipo_solicitud === TIPOS_SOLICITUD.CAMBIO) && (
+                <>
+                  <Divider>{getTipoTexto(formData.tipo_solicitud)}</Divider>
+                  {formData.zona ? (
+                    <Autocomplete
+                      options={herramientasMalEstado}
+                      getOptionLabel={(option) => `${option.codigo} - ${option.nombre} (${option.estado})`}
+                      value={herramientasMalEstado.find(h => h.id === formData.herramienta_id) || null}
+                      onChange={(e, newValue) => setFormData({ ...formData, herramienta_id: newValue?.id || null })}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Seleccionar Herramienta"
+                          required
+                          helperText="Solo se muestran herramientas en mal estado de la zona seleccionada"
+                        />
+                      )}
+                      noOptionsText="No hay herramientas en mal estado en esta zona"
+                    />
+                  ) : (
+                    <Alert severity="info">
+                      Primero seleccione una zona para ver las herramientas disponibles
+                    </Alert>
+                  )}
+                  <TextField
+                    fullWidth
+                    required
+                    label="Falla"
+                    multiline
+                    rows={3}
+                    value={formData.falla}
+                    onChange={(e) => setFormData({ ...formData, falla: e.target.value })}
+                    placeholder={formData.tipo_solicitud === TIPOS_SOLICITUD.REPARACION 
+                      ? "Describa la falla y la posible reparación"
+                      : "Describa la falla que requiere el cambio de la herramienta"
+                    }
+                  />
+                </>
+              )}
+
+              {/* Comentario adicional */}
               <TextField
                 fullWidth
-                label="Comentarios Adicionales"
+                label="Comentario Adicional (opcional)"
                 multiline
                 rows={2}
-                value={formData.comentarios}
-                onChange={(e) => setFormData({ ...formData, comentarios: e.target.value })}
+                value={formData.comentario_adicional}
+                onChange={(e) => setFormData({ ...formData, comentario_adicional: e.target.value })}
                 placeholder="Información adicional sobre la solicitud"
               />
             </Box>
@@ -678,50 +834,202 @@ export default function Solicitudes() {
           </DialogActions>
         </Dialog>
 
+        {/* Dialog para ver detalles */}
+        <Dialog open={openViewDialog} onClose={handleCloseViewDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>Detalles de Solicitud</DialogTitle>
+          <DialogContent>
+            {selectedSolicitud && (
+              <Box sx={{ pt: 2 }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2" color="text.secondary">Tipo:</Typography>
+                    <Typography>{getTipoTexto(selectedSolicitud.tipo)}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2" color="text.secondary">Zona:</Typography>
+                    <Typography>{selectedSolicitud.zona}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2" color="text.secondary">Solicitado por:</Typography>
+                    <Typography>{selectedSolicitud.usuarios?.email}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2" color="text.secondary">Fecha:</Typography>
+                    <Typography>{new Date(selectedSolicitud.created_at).toLocaleDateString('es-ES')}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2" color="text.secondary">Prioridad:</Typography>
+                    <Chip
+                      label={getPrioridadInfo(selectedSolicitud.prioridad).texto}
+                      color={getPrioridadInfo(selectedSolicitud.prioridad).color}
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2" color="text.secondary">Estado:</Typography>
+                    <Chip
+                      label={selectedSolicitud.estado}
+                      color={getEstadoColor(selectedSolicitud.estado)}
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" color="text.secondary">Descripción:</Typography>
+                    <Typography>{selectedSolicitud.motivo}</Typography>
+                  </Grid>
+                  {selectedSolicitud.falla && (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="text.secondary">Falla:</Typography>
+                      <Typography>{selectedSolicitud.falla}</Typography>
+                    </Grid>
+                  )}
+                  {selectedSolicitud.descripcion_uso && (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="text.secondary">Descripción de Uso:</Typography>
+                      <Typography>{selectedSolicitud.descripcion_uso}</Typography>
+                    </Grid>
+                  )}
+                  {selectedSolicitud.marca && (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="text.secondary">Marca:</Typography>
+                      <Typography>{selectedSolicitud.marca}</Typography>
+                    </Grid>
+                  )}
+                  {selectedSolicitud.comentario_adicional && (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="text.secondary">Comentario Adicional:</Typography>
+                      <Typography>{selectedSolicitud.comentario_adicional}</Typography>
+                    </Grid>
+                  )}
+                  {selectedSolicitud.comentario_revision && (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="text.secondary">Respuesta Admin:</Typography>
+                      <Typography>{selectedSolicitud.comentario_revision}</Typography>
+                    </Grid>
+                  )}
+                </Grid>
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseViewDialog}>Cerrar</Button>
+            {currentUser?.role === 'ADMIN' && selectedSolicitud?.estado === 'PENDIENTE' && (
+              <>
+                {/* <Button 
+                  onClick={() => {
+                    handleCloseViewDialog();
+                    handleOpenAdminDialog(selectedSolicitud, 'PENDIENTE');
+                  }}
+                  variant="outlined"
+                  color="warning"
+                >
+                  Mantener
+                </Button> */}
+                  {/* <Button 
+                    onClick={() => {
+                      handleCloseViewDialog();
+                      handleOpenAdminDialog(selectedSolicitud, 'RECHAZADA');
+                    }}
+                    variant="contained"
+                    color="error"
+                  >
+                    Rechazar
+                  </Button> */}
+                <Button 
+                  onClick={() => {
+                    handleCloseViewDialog();
+                    handleOpenAdminDialog(selectedSolicitud, 'APROBADA');
+                  }}
+                  variant="contained"
+                  color="success"
+                >
+                  Termianar solicitud
+                </Button>
+              </>
+            )}
+          </DialogActions>
+        </Dialog>
+
         {/* Dialog para respuesta admin */}
         <Dialog open={openAdminDialog} onClose={handleCloseAdminDialog} maxWidth="sm" fullWidth>
-          <DialogTitle>Revisar Solicitud</DialogTitle>
+          <DialogTitle>Procesar Solicitud</DialogTitle>
           <DialogContent>
             {selectedSolicitud && (
               <Box sx={{ pt: 2 }}>
                 <Typography variant="h6" gutterBottom>
-                  {selectedSolicitud.tipo === 'NUEVA_HERRAMIENTA' 
+                  {getTipoTexto(selectedSolicitud.tipo)}: {' '}
+                  {selectedSolicitud.tipo === TIPOS_SOLICITUD.NUEVA 
                     ? selectedSolicitud.herramienta_nueva_nombre 
                     : selectedSolicitud.herramientas?.nombre}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Solicitado por: {selectedSolicitud.usuarios?.email}
+                  Zona: {selectedSolicitud.zona} | Solicitado por: {selectedSolicitud.usuarios?.email}
                 </Typography>
                 <Typography variant="body2" gutterBottom>
                   {selectedSolicitud.motivo}
                 </Typography>
 
-                <FormControl fullWidth sx={{ mt: 2, mb: 2 }}>
-                  <InputLabel>Acción</InputLabel>
-                  <Select
+                <FormControl component="fieldset" sx={{ mt: 3, mb: 2 }}>
+                  <FormLabel component="legend">Decisión</FormLabel>
+                  <RadioGroup
                     value={adminResponse.accion}
-                    label="Acción"
                     onChange={(e) => setAdminResponse({ ...adminResponse, accion: e.target.value })}
                   >
-                    <MenuItem value="APROBAR">Aprobar</MenuItem>
-                    <MenuItem value="RECHAZAR">Rechazar</MenuItem>
-                  </Select>
+                    <FormControlLabel value="APROBADA" control={<Radio />} label="Aprobar" />
+                    <FormControlLabel value="RECHAZADA" control={<Radio />} label="Rechazar" />
+                    <FormControlLabel value="PENDIENTE" control={<Radio />} label="Mantener pendiente" />
+                  </RadioGroup>
                 </FormControl>
 
-                {adminResponse.accion === 'APROBAR' && selectedSolicitud.tipo === 'NUEVA_HERRAMIENTA' && (
-                  <TextField
-                    fullWidth
-                    label="Código para Nueva Herramienta"
-                    value={adminResponse.herramienta_nueva_codigo}
-                    onChange={(e) => setAdminResponse({ ...adminResponse, herramienta_nueva_codigo: e.target.value })}
-                    sx={{ mb: 2 }}
-                    placeholder="Ej: MART-001"
-                  />
+                {adminResponse.accion === 'APROBADA' && (
+                  <>
+                    <FormControlLabel
+                      control={
+                        <input
+                          type="checkbox"
+                          checked={adminResponse.crear_herramienta}
+                          onChange={(e) => setAdminResponse({ ...adminResponse, crear_herramienta: e.target.checked })}
+                        />
+                      }
+                      label={
+                        selectedSolicitud.tipo === TIPOS_SOLICITUD.NUEVA 
+                          ? "Crear nueva herramienta en el sistema"
+                          : selectedSolicitud.tipo === TIPOS_SOLICITUD.CAMBIO
+                          ? "Crear herramienta de reemplazo"
+                          : "Marcar herramienta como reparada"
+                      }
+                      sx={{ mb: 2 }}
+                    />
+
+                    {adminResponse.crear_herramienta && (selectedSolicitud.tipo === TIPOS_SOLICITUD.NUEVA || selectedSolicitud.tipo === TIPOS_SOLICITUD.CAMBIO) && (
+                      <>
+                        <TextField
+                          fullWidth
+                          label="Código de la herramienta"
+                          value={adminResponse.nuevo_codigo}
+                          onChange={(e) => setAdminResponse({ ...adminResponse, nuevo_codigo: e.target.value })}
+                          sx={{ mb: 2 }}
+                          placeholder="Ej: MART-001"
+                          required
+                        />
+                        <TextField
+                          fullWidth
+                          label="Descripción adicional"
+                          multiline
+                          rows={2}
+                          value={adminResponse.nueva_descripcion}
+                          onChange={(e) => setAdminResponse({ ...adminResponse, nueva_descripcion: e.target.value })}
+                          sx={{ mb: 2 }}
+                          placeholder="Descripción opcional para la herramienta"
+                        />
+                      </>
+                    )}
+                  </>
                 )}
 
                 <TextField
                   fullWidth
-                  label="Respuesta/Comentarios"
+                  label="Comentarios"
                   multiline
                   rows={3}
                   value={adminResponse.respuesta}
@@ -736,9 +1044,14 @@ export default function Solicitudes() {
             <Button 
               onClick={handleAdminResponse} 
               variant="contained"
-              color={adminResponse.accion === 'APROBAR' ? 'success' : 'error'}
+              color={
+                adminResponse.accion === 'APROBADA' ? 'success' : 
+                adminResponse.accion === 'RECHAZADA' ? 'error' : 'primary'
+              }
+              disabled={adminResponse.accion === 'PENDIENTE'}
             >
-              {adminResponse.accion === 'APROBAR' ? 'Aprobar' : 'Rechazar'}
+              {adminResponse.accion === 'APROBADA' ? 'Aprobar' : 
+               adminResponse.accion === 'RECHAZADA' ? 'Rechazar' : 'Pendiente'}
             </Button>
           </DialogActions>
         </Dialog>

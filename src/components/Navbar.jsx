@@ -22,7 +22,6 @@ import {
 import {
   Menu as MenuIcon,
   Build as BuildIcon,
-  CheckCircle as CheckCircleIcon,
   Assignment as AssignmentIcon,
   AdminPanelSettings as AdminIcon,
   Logout as LogoutIcon,
@@ -31,7 +30,6 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Visibility as VisibilityIcon,
-  Timeline as MovimientosIcon,
   CalendarToday as ChecksDiariosIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -116,12 +114,6 @@ export default function Navbar() {
       description: 'Control diario de herramientas por zona' 
     },
     { 
-      text: 'Controles', 
-      icon: <CheckCircleIcon />, 
-      path: '/controles', 
-      description: 'Revisar controles diarios y semanales de técnicos' 
-    },
-    { 
       text: 'Solicitudes', 
       icon: <AssignmentIcon />, 
       path: '/solicitudes', 
@@ -132,12 +124,6 @@ export default function Navbar() {
       icon: <PeopleIcon />, 
       path: '/usuarios', 
       description: 'Gestionar usuarios del sistema' 
-    },
-    { 
-      text: 'Movimientos', 
-      icon: <MovimientosIcon />, 
-      path: '/movimientos', 
-      description: 'Historial de solicitudes, entregas y rechazos' 
     }
   ];
 
@@ -154,12 +140,6 @@ export default function Navbar() {
       icon: <ChecksDiariosIcon />, 
       path: '/checks-diarios', 
       description: 'Realizar control diario de herramientas por zona' 
-    },
-    { 
-      text: 'Controles', 
-      icon: <CheckCircleIcon />, 
-      path: '/controles', 
-      description: 'Realizar controles diarios y semanales de herramientas' 
     },
     { 
       text: 'Solicitudes', 
