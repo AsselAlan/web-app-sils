@@ -28,11 +28,10 @@ export const ESTADOS_CHECKS = {
   OMITIDO: 'OMITIDO'
 };
 
-// Estados encontrados en verificación
+// Estados encontrados en verificación (solo OK y FALTANTE)
 export const ESTADOS_VERIFICACION = {
   OK: 'OK',
-  FALTANTE: 'FALTANTE',
-  DAÑADO: 'DAÑADO'
+  FALTANTE: 'FALTANTE'
 };
 
 // Utilidades para obtener labels en español
@@ -61,7 +60,6 @@ export const LABELS = {
   },
   ESTADOS_VERIFICACION: {
     OK: 'OK - Presente',
-    FALTANTE: 'Faltante',
-    DAÑADO: 'Dañado'
+    FALTANTE: 'Faltante'
   }
 };
