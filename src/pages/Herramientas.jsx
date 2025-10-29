@@ -58,7 +58,7 @@ export default function Herramientas() {
   const [filtros, setFiltros] = useState({
     busqueda: '',
     zona: '',
-    estado: '',
+    estadoSeleccionado: '', // Nuevo filtro para las tarjetas clickeables
   });
 
   // Formulario
@@ -346,6 +346,17 @@ export default function Herramientas() {
     );
   };
 
+  // Función para manejar el click en las tarjetas de estadísticas
+  const handleEstadoFilter = (estado) => {
+    if (filtros.estadoSeleccionado === estado) {
+      // Si ya está seleccionado, deseleccionar (mostrar todos)
+      setFiltros({ ...filtros, estadoSeleccionado: '' });
+    } else {
+      // Seleccionar el nuevo estado
+      setFiltros({ ...filtros, estadoSeleccionado: estado });
+    }
+  };
+
   // Filtrar herramientas
   const herramientasFiltradas = herramientas.filter((h) => {
     const matchBusqueda = !filtros.busqueda || 
@@ -353,7 +364,10 @@ export default function Herramientas() {
       h.codigo.toLowerCase().includes(filtros.busqueda.toLowerCase());
     
     const matchZona = !filtros.zona || h.zona === filtros.zona;
-    const matchEstado = !filtros.estado || h.estado === filtros.estado;
+    const matchEstado = !filtros.estadoSeleccionado || 
+      (filtros.estadoSeleccionado === 'FALTANTE_ROTA' ? 
+        ['FALTANTE', 'ROTA'].includes(h.estado) : 
+        h.estado === filtros.estadoSeleccionado);
 
     return matchBusqueda && matchZona && matchEstado;
   });
@@ -422,7 +436,7 @@ export default function Herramientas() {
           <Typography variant="h6" component="h2">
             Estadísticas
           </Typography>
-          {(filtros.busqueda || filtros.zona || filtros.estado) && (
+          {(filtros.busqueda || filtros.zona || filtros.estadoSeleccionado) && (
             <>
               <Chip 
                 label="Filtros activos" 
@@ -432,7 +446,7 @@ export default function Herramientas() {
               />
               <Button
                 size="small"
-                onClick={() => setFiltros({ busqueda: '', zona: '', estado: '' })}
+                onClick={() => setFiltros({ busqueda: '', zona: '', estadoSeleccionado: '' })}
                 startIcon={<FilterIcon />}
               >
                 Limpiar filtros
@@ -442,7 +456,21 @@ export default function Herramientas() {
         </Box>
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid item xs={12} sm={6} md={2.4}>
-            <Card>
+            <Card 
+              sx={{ 
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                transform: filtros.estadoSeleccionado === '' ? 'scale(1.02)' : 'scale(1)',
+                boxShadow: filtros.estadoSeleccionado === '' ? 4 : 1,
+                border: filtros.estadoSeleccionado === '' ? '2px solid' : '1px solid transparent',
+                borderColor: filtros.estadoSeleccionado === '' ? 'primary.main' : 'transparent',
+                '&:hover': {
+                  transform: 'scale(1.02)',
+                  boxShadow: 4
+                }
+              }}
+              onClick={() => handleEstadoFilter('')}
+            >
               <CardContent>
                 <Typography color="text.secondary" gutterBottom variant="body2">
                   Total
@@ -454,7 +482,23 @@ export default function Herramientas() {
             </Card>
           </Grid>
           <Grid item xs={12} sm={6} md={2.4}>
-            <Card sx={{ bgcolor: 'success.light', color: 'success.contrastText' }}>
+            <Card 
+              sx={{ 
+                bgcolor: filtros.estadoSeleccionado === 'BIEN' ? 'success.main' : 'success.light', 
+                color: 'success.contrastText',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                transform: filtros.estadoSeleccionado === 'BIEN' ? 'scale(1.05)' : 'scale(1)',
+                boxShadow: filtros.estadoSeleccionado === 'BIEN' ? 6 : 2,
+                border: filtros.estadoSeleccionado === 'BIEN' ? '3px solid' : '1px solid transparent',
+                borderColor: filtros.estadoSeleccionado === 'BIEN' ? 'success.dark' : 'transparent',
+                '&:hover': {
+                  transform: 'scale(1.02)',
+                  boxShadow: 4
+                }
+              }}
+              onClick={() => handleEstadoFilter('BIEN')}
+            >
               <CardContent>
                 <Typography gutterBottom variant="body2">
                   Bien
@@ -466,7 +510,23 @@ export default function Herramientas() {
             </Card>
           </Grid>
           <Grid item xs={12} sm={6} md={2.4}>
-            <Card sx={{ bgcolor: 'warning.light', color: 'warning.contrastText' }}>
+            <Card 
+              sx={{ 
+                bgcolor: filtros.estadoSeleccionado === 'REGULAR' ? 'warning.main' : 'warning.light', 
+                color: 'warning.contrastText',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                transform: filtros.estadoSeleccionado === 'REGULAR' ? 'scale(1.05)' : 'scale(1)',
+                boxShadow: filtros.estadoSeleccionado === 'REGULAR' ? 6 : 2,
+                border: filtros.estadoSeleccionado === 'REGULAR' ? '3px solid' : '1px solid transparent',
+                borderColor: filtros.estadoSeleccionado === 'REGULAR' ? 'warning.dark' : 'transparent',
+                '&:hover': {
+                  transform: 'scale(1.02)',
+                  boxShadow: 4
+                }
+              }}
+              onClick={() => handleEstadoFilter('REGULAR')}
+            >
               <CardContent>
                 <Typography gutterBottom variant="body2">
                   Regular
@@ -478,7 +538,23 @@ export default function Herramientas() {
             </Card>
           </Grid>
           <Grid item xs={12} sm={6} md={2.4}>
-            <Card sx={{ bgcolor: 'error.light', color: 'error.contrastText' }}>
+            <Card 
+              sx={{ 
+                bgcolor: filtros.estadoSeleccionado === 'MAL' ? 'error.main' : 'error.light', 
+                color: 'error.contrastText',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                transform: filtros.estadoSeleccionado === 'MAL' ? 'scale(1.05)' : 'scale(1)',
+                boxShadow: filtros.estadoSeleccionado === 'MAL' ? 6 : 2,
+                border: filtros.estadoSeleccionado === 'MAL' ? '3px solid' : '1px solid transparent',
+                borderColor: filtros.estadoSeleccionado === 'MAL' ? 'error.dark' : 'transparent',
+                '&:hover': {
+                  transform: 'scale(1.02)',
+                  boxShadow: 4
+                }
+              }}
+              onClick={() => handleEstadoFilter('MAL')}
+            >
               <CardContent>
                 <Typography gutterBottom variant="body2">
                   Mal
@@ -490,7 +566,23 @@ export default function Herramientas() {
             </Card>
           </Grid>
           <Grid item xs={12} sm={6} md={2.4}>
-            <Card sx={{ bgcolor: 'grey.400' }}>
+            <Card 
+              sx={{ 
+                bgcolor: filtros.estadoSeleccionado === 'FALTANTE_ROTA' ? 'grey.600' : 'grey.400',
+                color: 'white',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                transform: filtros.estadoSeleccionado === 'FALTANTE_ROTA' ? 'scale(1.05)' : 'scale(1)',
+                boxShadow: filtros.estadoSeleccionado === 'FALTANTE_ROTA' ? 6 : 2,
+                border: filtros.estadoSeleccionado === 'FALTANTE_ROTA' ? '3px solid' : '1px solid transparent',
+                borderColor: filtros.estadoSeleccionado === 'FALTANTE_ROTA' ? 'grey.800' : 'transparent',
+                '&:hover': {
+                  transform: 'scale(1.02)',
+                  boxShadow: 4
+                }
+              }}
+              onClick={() => handleEstadoFilter('FALTANTE_ROTA')}
+            >
               <CardContent>
                 <Typography gutterBottom variant="body2">
                   Faltante/Rota
@@ -506,7 +598,7 @@ export default function Herramientas() {
         {/* Filtros */}
         <Paper sx={{ p: 2, mb: 3 }}>
           <Grid container spacing={2}>
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
                 size="small"
@@ -522,7 +614,7 @@ export default function Herramientas() {
                 }}
               />
             </Grid>
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={6}>
               <FormControl fullWidth size="small">
                 <InputLabel>Zona</InputLabel>
                 <Select
@@ -534,23 +626,6 @@ export default function Herramientas() {
                   <MenuItem value="TALLER">Taller</MenuItem>
                   <MenuItem value="INSTALACIONES">Instalaciones</MenuItem>
                   <MenuItem value="MANTENIMIENTO">Mantenimiento</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Estado</InputLabel>
-                <Select
-                  value={filtros.estado}
-                  label="Estado"
-                  onChange={(e) => setFiltros({ ...filtros, estado: e.target.value })}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  <MenuItem value="BIEN">Bien</MenuItem>
-                  <MenuItem value="REGULAR">Regular</MenuItem>
-                  <MenuItem value="MAL">Mal</MenuItem>
-                  <MenuItem value="FALTANTE">Faltante</MenuItem>
-                  <MenuItem value="ROTA">Rota</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
