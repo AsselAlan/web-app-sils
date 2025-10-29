@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -28,6 +29,7 @@ import {
   Card,
   CardContent,
   InputAdornment,
+  Tooltip,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -35,12 +37,15 @@ import {
   Delete as DeleteIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
+  Assignment as AssignmentIcon,
+  AddCircleOutline as AddCircleOutlineIcon,
 } from '@mui/icons-material';
 import Navbar from '../components/Navbar';
 import { supabase } from '../lib/supabase';
 import { getCurrentUserProfile } from '../services/auth';
 
 export default function Herramientas() {
+  const navigate = useNavigate();
   const [herramientas, setHerramientas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
@@ -80,11 +85,29 @@ export default function Herramientas() {
       setLoading(true);
       const { data, error } = await supabase
         .from('herramientas')
-        .select('*')
+        .select(`
+          *,
+          solicitudes_pendientes:solicitudes!left(
+            id,
+            tipo,
+            estado,
+            usuarios:solicitado_por(email),
+            created_at
+          )
+        `)
         .order('nombre', { ascending: true });
 
       if (error) throw error;
-      setHerramientas(data || []);
+      
+      // Filtrar solo las solicitudes pendientes en el frontend
+      const herramientasConSolicitudes = (data || []).map(herramienta => ({
+        ...herramienta,
+        solicitudes_pendientes: (herramienta.solicitudes_pendientes || []).filter(
+          solicitud => solicitud.estado === 'PENDIENTE'
+        )
+      }));
+      
+      setHerramientas(herramientasConSolicitudes);
     } catch (err) {
       console.error('Error al cargar herramientas:', err);
       setError('Error al cargar el listado de herramientas');
@@ -227,6 +250,100 @@ export default function Herramientas() {
       'ROTA': 'Rota',
     };
     return labels[estado] || estado;
+  };
+
+  const getTipoSolicitudTexto = (tipo) => {
+    const tipos = {
+      'NUEVA': 'Nueva',
+      'REPARACION': 'Reparación',
+      'CAMBIO': 'Cambio',
+    };
+    return tipos[tipo] || tipo;
+  };
+
+  const renderSolicitudPendiente = (herramienta) => {
+    // Filtrar solo solicitudes pendientes
+    const solicitudesPendientes = herramienta.solicitudes_pendientes?.filter(
+      solicitud => solicitud.estado === 'PENDIENTE'
+    ) || [];
+
+    if (solicitudesPendientes.length === 0) {
+      return null;
+    }
+
+    const solicitud = solicitudesPendientes[0]; // Tomar la primera solicitud pendiente
+    
+    return (
+      <Tooltip 
+        title={`Solicitud de ${getTipoSolicitudTexto(solicitud.tipo)} por ${solicitud.usuarios?.email || 'Usuario'} - ${new Date(solicitud.created_at).toLocaleDateString('es-ES')} (Click para ver)`}
+        arrow
+      >
+        <Chip
+          icon={<AssignmentIcon />}
+          label="Solicitud Pendiente"
+          size="small"
+          color="warning"
+          variant="outlined"
+          onClick={() => navigate('/solicitudes')}
+          sx={{ 
+            ml: 1,
+            cursor: 'pointer',
+            '&:hover': {
+              backgroundColor: 'warning.light',
+              color: 'warning.contrastText'
+            }
+          }}
+        />
+      </Tooltip>
+    );
+  };
+
+  const renderCrearSolicitud = (herramienta) => {
+    // Solo mostrar para técnicos
+    if (userProfile?.role !== 'TECNICO') {
+      return null;
+    }
+    
+    // Solo mostrar para herramientas en mal estado o rotas que NO tengan solicitudes pendientes
+    const tieneSolicitudPendiente = herramienta.solicitudes_pendientes?.length > 0;
+    const necesitaReparacion = ['MAL', 'ROTA'].includes(herramienta.estado);
+    
+    if (!necesitaReparacion || tieneSolicitudPendiente) {
+      return null;
+    }
+    
+    const tipoSolicitud = herramienta.estado === 'ROTA' ? 'cambio' : 'reparación';
+    
+    return (
+      <Tooltip 
+        title={`Crear solicitud de ${tipoSolicitud} para esta herramienta`}
+        arrow
+      >
+        <Chip
+          icon={<AddCircleOutlineIcon />}
+          label="Crear Solicitud"
+          size="small"
+          color="primary"
+          variant="outlined"
+          onClick={() => navigate('/solicitudes', { 
+            state: { 
+              crearSolicitud: true, 
+              herramientaId: herramienta.id,
+              zona: herramienta.zona,
+              tipo: herramienta.estado === 'ROTA' ? 'CAMBIO' : 'REPARACION'
+            } 
+          })}
+          sx={{ 
+            ml: 1,
+            cursor: 'pointer',
+            '&:hover': {
+              backgroundColor: 'primary.light',
+              color: 'primary.contrastText'
+            }
+          }}
+        />
+      </Tooltip>
+    );
   };
 
   // Filtrar herramientas
@@ -481,11 +598,15 @@ export default function Herramientas() {
                       <Chip label={getZonaLabel(herramienta.zona)} size="small" color="primary" />
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={getEstadoLabel(herramienta.estado)}
-                        size="small"
-                        color={getEstadoColor(herramienta.estado)}
-                      />
+                      <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                        <Chip
+                          label={getEstadoLabel(herramienta.estado)}
+                          size="small"
+                          color={getEstadoColor(herramienta.estado)}
+                        />
+                        {renderSolicitudPendiente(herramienta)}
+                        {renderCrearSolicitud(herramienta)}
+                      </Box>
                     </TableCell>
                     {userProfile?.role === 'ADMIN' && (
                       <TableCell align="center">

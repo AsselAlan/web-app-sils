@@ -56,10 +56,10 @@ export default function Login() {
         <Paper elevation={3} sx={{ p: 4, width: '100%' }}>
           <Box sx={{ textAlign: 'center', mb: 3 }}>
             <Typography variant="h4" component="h1" gutterBottom fontWeight="bold">
-              SILS
+              SILSTECH BERISSO.
             </Typography>
             <Typography variant="subtitle1" color="text.secondary">
-              Sistema Integrado de Logística de Salud
+              Sistema de control de herramientas.
             </Typography>
           </Box>
 

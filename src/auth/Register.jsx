@@ -76,7 +76,7 @@ export default function Register() {
               Crear Cuenta
             </Typography>
             <Typography variant="subtitle1" color="text.secondary">
-              Regístrate en SILS
+            Regístrate en SILSTECH CONTROL DE HERRAMIENTAS
             </Typography>
           </Box>
 

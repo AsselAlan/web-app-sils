@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -54,6 +55,7 @@ import {
   Close as CloseIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
+  Star as StarIcon,
 } from '@mui/icons-material';
 import Navbar from '../components/Navbar';
 import { supabase } from '../lib/supabase';
@@ -78,6 +80,7 @@ const TIPOS_SOLICITUD = {
 };
 
 export default function Solicitudes() {
+  const location = useLocation();
   const [solicitudes, setSolicitudes] = useState([]);
   const [herramientasMalEstado, setHerramientasMalEstado] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -130,6 +133,28 @@ export default function Solicitudes() {
   useEffect(() => {
     cargarDatos();
   }, []);
+
+  // Manejar parámetros de navegación desde Herramientas
+  useEffect(() => {
+    if (location.state?.crearSolicitud && currentUser) {
+      const { herramientaId, zona, tipo } = location.state;
+      
+      // Pre-rellenar el formulario
+      setFormData(prev => ({
+        ...prev,
+        tipo_solicitud: tipo,
+        zona: zona,
+        herramienta_id: herramientaId,
+        prioridad: 'NECESARIA'
+      }));
+      
+      // Abrir el diálogo de nueva solicitud
+      setOpenDialog(true);
+      
+      // Limpiar el state para evitar que se reabra
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, currentUser]);
 
   // Cargar herramientas cuando cambia la zona
   useEffect(() => {
@@ -519,11 +544,9 @@ export default function Solicitudes() {
     }
   };
 
-  // Filtrar solicitudes según el rol del usuario
-  const filteredSolicitudes = solicitudes.filter(s => {
-    if (currentUser?.role === 'ADMIN') return true;
-    return s.solicitado_por === currentUser?.id;
-  });
+  // Ahora todos los usuarios autenticados (técnicos y admins) pueden ver todas las solicitudes
+  // Esto ayuda a evitar solicitudes duplicadas ya que los técnicos pueden ver lo que otros han solicitado
+  const filteredSolicitudes = solicitudes;
 
   // Separar por estado
   const solicitudesPendientes = filteredSolicitudes.filter(s => s.estado === 'PENDIENTE');
@@ -609,7 +632,7 @@ export default function Solicitudes() {
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h4" component="h1">
-            {currentUser?.role === 'ADMIN' ? 'Gestión de Solicitudes' : 'Mis Solicitudes'}
+            {currentUser?.role === 'ADMIN' ? 'Gestión de Solicitudes' : 'Solicitudes del Sistema'}
           </Typography>
         </Box>
 
@@ -837,6 +860,19 @@ export default function Solicitudes() {
             {filtroActivo === 'RECHAZADA' && `Solicitudes Rechazadas (${getSolicitudesFiltradas().length})`}
             {filtroActivo === 'CANCELADA' && `Solicitudes Canceladas (${getSolicitudesFiltradas().length})`}
           </Typography>
+          {currentUser?.role === 'TECNICO' && (
+            <Alert severity="info" sx={{ mt: 2, mb: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="body2">
+                  Puedes ver todas las solicitudes del sistema para evitar duplicados. Las tuyas están marcadas con 
+                </Typography>
+                <StarIcon sx={{ fontSize: 16, color: 'primary.main' }} />
+                <Typography variant="body2">
+                  y tienen fondo azul claro.
+                </Typography>
+              </Box>
+            </Alert>
+          )}
           {(filtros.busqueda || filtros.tipo || filtros.zona || filtros.prioridad) && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
               {getSolicitudesFiltradas().length} de {' '}
@@ -879,8 +915,9 @@ export default function Solicitudes() {
                     onClick={() => handleOpenViewDialog(solicitud)}
                     sx={{ 
                       cursor: 'pointer',
+                      backgroundColor: solicitud.solicitado_por === currentUser?.id ? 'rgba(25, 118, 210, 0.08)' : 'transparent',
                       '&:hover': {
-                        backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                        backgroundColor: solicitud.solicitado_por === currentUser?.id ? 'rgba(25, 118, 210, 0.12)' : 'rgba(0, 0, 0, 0.04)'
                       }
                     }}
                   >
@@ -906,9 +943,16 @@ export default function Solicitudes() {
                       <Chip label={solicitud.zona} size="small" variant="outlined" />
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2">
-                        {solicitud.usuarios?.email}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2">
+                          {solicitud.usuarios?.email}
+                        </Typography>
+                        {solicitud.solicitado_por === currentUser?.id && (
+                          <Tooltip title="Tu solicitud">
+                            <StarIcon sx={{ fontSize: 16, color: 'primary.main' }} />
+                          </Tooltip>
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell>
                       <Chip
