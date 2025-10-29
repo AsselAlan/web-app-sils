@@ -4,7 +4,7 @@ export const ROLES = {
   TECNICO: 'TECNICO'
 };
 
-// Zonas de trabajo disponibles (solo para herramientas)
+// Zonas de trabajo disponibles
 export const ZONAS = {
   INSTALACIONES: 'INSTALACIONES',
   MANTENIMIENTO: 'MANTENIMIENTO',
@@ -17,21 +17,24 @@ export const ESTADOS_HERRAMIENTAS = {
   REGULAR: 'REGULAR',
   MAL: 'MAL',
   FALTANTE: 'FALTANTE',
-  NO_HAY: 'NO_HAY'
+  ROTA: 'ROTA'
 };
 
-// Estados para checks diarios
-export const ESTADOS_CHECKS = {
+// Estados de solicitudes
+export const ESTADOS_SOLICITUDES = {
   PENDIENTE: 'PENDIENTE',
-  EN_PROCESO: 'EN_PROCESO',
-  COMPLETADO: 'COMPLETADO',
-  OMITIDO: 'OMITIDO'
+  APROBADA: 'APROBADA',
+  RECHAZADA: 'RECHAZADA',
+  ENTREGADA: 'ENTREGADA',
+  COMPLETADA: 'COMPLETADA',
+  CANCELADA: 'CANCELADA'
 };
 
-// Estados encontrados en verificación (solo OK y FALTANTE)
-export const ESTADOS_VERIFICACION = {
-  OK: 'OK',
-  FALTANTE: 'FALTANTE'
+// Tipos de solicitudes
+export const TIPOS_SOLICITUDES = {
+  CAMBIO: 'CAMBIO',
+  NUEVA: 'NUEVA',
+  REPARACION: 'REPARACION'
 };
 
 // Utilidades para obtener labels en español
@@ -50,16 +53,19 @@ export const LABELS = {
     REGULAR: 'Estado regular',
     MAL: 'En mal estado',
     FALTANTE: 'Faltante',
-    NO_HAY: 'No disponible'
+    ROTA: 'Rota'
   },
-  ESTADOS_CHECKS: {
+  ESTADOS_SOLICITUDES: {
     PENDIENTE: 'Pendiente',
-    EN_PROCESO: 'En proceso',
-    COMPLETADO: 'Completado',
-    OMITIDO: 'Omitido'
+    APROBADA: 'Aprobada',
+    RECHAZADA: 'Rechazada',
+    ENTREGADA: 'Entregada',
+    COMPLETADA: 'Completada',
+    CANCELADA: 'Cancelada'
   },
-  ESTADOS_VERIFICACION: {
-    OK: 'OK - Presente',
-    FALTANTE: 'Faltante'
+  TIPOS_SOLICITUDES: {
+    CAMBIO: 'Cambio',
+    NUEVA: 'Nueva',
+    REPARACION: 'Reparación'
   }
 };

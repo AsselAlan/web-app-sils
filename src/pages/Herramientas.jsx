@@ -52,7 +52,6 @@ export default function Herramientas() {
   // Filtros
   const [filtros, setFiltros] = useState({
     busqueda: '',
-    tipo: '',
     zona: '',
     estado: '',
   });
@@ -62,7 +61,6 @@ export default function Herramientas() {
     codigo: '',
     nombre: '',
     descripcion: '',
-    tipo: 'HERRAMIENTAS_MANO',
     zona: 'TALLER',
     estado: 'BIEN',
   });
@@ -102,7 +100,6 @@ export default function Herramientas() {
         codigo: herramienta.codigo,
         nombre: herramienta.nombre,
         descripcion: herramienta.descripcion || '',
-        tipo: herramienta.tipo,
         zona: herramienta.zona,
         estado: herramienta.estado,
       });
@@ -112,7 +109,6 @@ export default function Herramientas() {
         codigo: '',
         nombre: '',
         descripcion: '',
-        tipo: 'HERRAMIENTAS_MANO',
         zona: 'TALLER',
         estado: 'BIEN',
       });
@@ -186,7 +182,7 @@ export default function Herramientas() {
         .from('herramientas')
         .delete()
         .eq('id', id)
-        .select(); // Agregamos select() para obtener información sobre el registro eliminado
+        .select();
 
       if (error) {
         console.error('Error de Supabase:', error);
@@ -200,15 +196,6 @@ export default function Herramientas() {
       console.error('Error al eliminar herramienta:', err);
       setError(`Error al eliminar: ${err.message || 'Error desconocido'}`);
     }
-  };
-
-  const getTipoLabel = (tipo) => {
-    const labels = {
-      'HERRAMIENTAS_MANO': 'De Mano',
-      'MAQUINA': 'Máquinas',
-      'INSUMO': 'Insumos',
-    };
-    return labels[tipo] || tipo;
   };
 
   const getZonaLabel = (zona) => {
@@ -225,7 +212,8 @@ export default function Herramientas() {
       'BIEN': 'success',
       'REGULAR': 'warning', 
       'MAL': 'error',
-      'ROTO': 'error',
+      'FALTANTE': 'default',
+      'ROTA': 'error',
     };
     return colors[estado] || 'default';
   };
@@ -235,7 +223,8 @@ export default function Herramientas() {
       'BIEN': 'Bien',
       'REGULAR': 'Regular',
       'MAL': 'Mal',
-      'ROTO': 'Roto',
+      'FALTANTE': 'Faltante',
+      'ROTA': 'Rota',
     };
     return labels[estado] || estado;
   };
@@ -246,20 +235,20 @@ export default function Herramientas() {
       h.nombre.toLowerCase().includes(filtros.busqueda.toLowerCase()) ||
       h.codigo.toLowerCase().includes(filtros.busqueda.toLowerCase());
     
-    const matchTipo = !filtros.tipo || h.tipo === filtros.tipo;
     const matchZona = !filtros.zona || h.zona === filtros.zona;
     const matchEstado = !filtros.estado || h.estado === filtros.estado;
 
-    return matchBusqueda && matchTipo && matchZona && matchEstado;
+    return matchBusqueda && matchZona && matchEstado;
   });
 
-  // Estadísticas
+  // Estadísticas basadas en herramientas filtradas
   const stats = {
-    total: herramientas.length,
-    bien: herramientas.filter(h => h.estado === 'BIEN').length,
-    regular: herramientas.filter(h => h.estado === 'REGULAR').length,
-    mal: herramientas.filter(h => h.estado === 'MAL').length,
-    roto: herramientas.filter(h => h.estado === 'ROTO').length,
+    total: herramientasFiltradas.length,
+    bien: herramientasFiltradas.filter(h => h.estado === 'BIEN').length,
+    regular: herramientasFiltradas.filter(h => h.estado === 'REGULAR').length,
+    mal: herramientasFiltradas.filter(h => h.estado === 'MAL').length,
+    faltante: herramientasFiltradas.filter(h => h.estado === 'FALTANTE').length,
+    rota: herramientasFiltradas.filter(h => h.estado === 'ROTA').length,
   };
 
   if (loading) {
@@ -312,6 +301,28 @@ export default function Herramientas() {
         )}
 
         {/* Estadísticas */}
+        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h6" component="h2">
+            Estadísticas
+          </Typography>
+          {(filtros.busqueda || filtros.zona || filtros.estado) && (
+            <>
+              <Chip 
+                label="Filtros activos" 
+                size="small" 
+                color="primary" 
+                variant="outlined"
+              />
+              <Button
+                size="small"
+                onClick={() => setFiltros({ busqueda: '', zona: '', estado: '' })}
+                startIcon={<FilterIcon />}
+              >
+                Limpiar filtros
+              </Button>
+            </>
+          )}
+        </Box>
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid item xs={12} sm={6} md={2.4}>
             <Card>
@@ -365,10 +376,10 @@ export default function Herramientas() {
             <Card sx={{ bgcolor: 'grey.400' }}>
               <CardContent>
                 <Typography gutterBottom variant="body2">
-                  Roto
+                  Faltante/Rota
                 </Typography>
                 <Typography variant="h4" fontWeight="bold">
-                  {stats.roto}
+                  {stats.faltante + stats.rota}
                 </Typography>
               </CardContent>
             </Card>
@@ -378,7 +389,7 @@ export default function Herramientas() {
         {/* Filtros */}
         <Paper sx={{ p: 2, mb: 3 }}>
           <Grid container spacing={2}>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
                 size="small"
@@ -394,22 +405,7 @@ export default function Herramientas() {
                 }}
               />
             </Grid>
-            <Grid item xs={12} md={3}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Tipo</InputLabel>
-                <Select
-                  value={filtros.tipo}
-                  label="Tipo"
-                  onChange={(e) => setFiltros({ ...filtros, tipo: e.target.value })}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  <MenuItem value="HERRAMIENTAS_MANO">De Mano</MenuItem>
-                  <MenuItem value="MAQUINA">Máquinas</MenuItem>
-                  <MenuItem value="INSUMO">Insumos</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={4}>
               <FormControl fullWidth size="small">
                 <InputLabel>Zona</InputLabel>
                 <Select
@@ -424,7 +420,7 @@ export default function Herramientas() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={4}>
               <FormControl fullWidth size="small">
                 <InputLabel>Estado</InputLabel>
                 <Select
@@ -436,7 +432,8 @@ export default function Herramientas() {
                   <MenuItem value="BIEN">Bien</MenuItem>
                   <MenuItem value="REGULAR">Regular</MenuItem>
                   <MenuItem value="MAL">Mal</MenuItem>
-                  <MenuItem value="ROTO">Roto</MenuItem>
+                  <MenuItem value="FALTANTE">Faltante</MenuItem>
+                  <MenuItem value="ROTA">Rota</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -450,7 +447,6 @@ export default function Herramientas() {
               <TableRow>
                 <TableCell>Código</TableCell>
                 <TableCell>Nombre</TableCell>
-                <TableCell>Tipo</TableCell>
                 <TableCell>Zona</TableCell>
                 <TableCell>Estado</TableCell>
                 {userProfile?.role === 'ADMIN' && (
@@ -461,7 +457,7 @@ export default function Herramientas() {
             <TableBody>
               {herramientasFiltradas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={userProfile?.role === 'ADMIN' ? 6 : 5} align="center">
+                  <TableCell colSpan={userProfile?.role === 'ADMIN' ? 5 : 4} align="center">
                     <Typography variant="body2" color="text.secondary">
                       No hay herramientas que coincidan con los filtros
                     </Typography>
@@ -480,9 +476,6 @@ export default function Herramientas() {
                           {herramienta.descripcion}
                         </Typography>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={getTipoLabel(herramienta.tipo)} size="small" />
                     </TableCell>
                     <TableCell>
                       <Chip label={getZonaLabel(herramienta.zona)} size="small" color="primary" />
@@ -555,21 +548,7 @@ export default function Herramientas() {
                     rows={2}
                   />
                 </Grid>
-                <Grid item xs={12} md={4}>
-                  <FormControl fullWidth>
-                    <InputLabel>Tipo</InputLabel>
-                    <Select
-                      value={formData.tipo}
-                      label="Tipo"
-                      onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
-                    >
-                      <MenuItem value="HERRAMIENTAS_MANO">De Mano</MenuItem>
-                      <MenuItem value="MAQUINA">Máquinas</MenuItem>
-                      <MenuItem value="INSUMO">Insumos</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} md={4}>
+                <Grid item xs={12} md={6}>
                   <FormControl fullWidth>
                     <InputLabel>Zona</InputLabel>
                     <Select
@@ -583,7 +562,7 @@ export default function Herramientas() {
                     </Select>
                   </FormControl>
                 </Grid>
-                <Grid item xs={12} md={4}>
+                <Grid item xs={12} md={6}>
                   <FormControl fullWidth>
                     <InputLabel>Estado</InputLabel>
                     <Select
@@ -594,7 +573,8 @@ export default function Herramientas() {
                       <MenuItem value="BIEN">Bien</MenuItem>
                       <MenuItem value="REGULAR">Regular</MenuItem>
                       <MenuItem value="MAL">Mal</MenuItem>
-                      <MenuItem value="ROTO">Roto</MenuItem>
+                      <MenuItem value="FALTANTE">Faltante</MenuItem>
+                      <MenuItem value="ROTA">Rota</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>

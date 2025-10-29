@@ -30,7 +30,6 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Visibility as VisibilityIcon,
-  CalendarToday as ChecksDiariosIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -108,12 +107,6 @@ export default function Navbar() {
       description: 'Agregar, editar, eliminar y sumar herramientas' 
     },
     { 
-      text: 'Checks Diarios', 
-      icon: <ChecksDiariosIcon />, 
-      path: '/checks-diarios', 
-      description: 'Control diario de herramientas por zona' 
-    },
-    { 
       text: 'Solicitudes', 
       icon: <AssignmentIcon />, 
       path: '/solicitudes', 
@@ -134,12 +127,6 @@ export default function Navbar() {
       icon: <VisibilityIcon />, 
       path: '/herramientas', 
       description: 'Ver herramientas y filtrar por zona, estado, etc.' 
-    },
-    { 
-      text: 'Checks Diarios', 
-      icon: <ChecksDiariosIcon />, 
-      path: '/checks-diarios', 
-      description: 'Realizar control diario de herramientas por zona' 
     },
     { 
       text: 'Solicitudes', 

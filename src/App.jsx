@@ -3,13 +3,10 @@ import Login from './auth/Login';
 import Register from './auth/Register';
 
 import Herramientas from './pages/Herramientas';
-import Controles from './pages/Controles';
 import Solicitudes from './pages/Solicitudes';
-import ChecksDiarios from './pages/ChecksDiarios';
 import Admin from './pages/Admin';
 import Usuarios from './pages/Usuarios';
 import Historial from './pages/Historial';
-import Movimientos from './pages/Movimientos';
 import ProtectedRoute from './components/ProtectedRoute';
 import RoleGuard from './components/RoleGuard';
 
@@ -31,26 +28,10 @@ function App() {
           }
         />
         <Route
-          path="/controles"
-          element={
-            <ProtectedRoute>
-              <Controles />
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/solicitudes"
           element={
             <ProtectedRoute>
               <Solicitudes />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/checks-diarios"
-          element={
-            <ProtectedRoute>
-              <ChecksDiarios />
             </ProtectedRoute>
           }
         />
@@ -77,11 +58,11 @@ function App() {
           }
         />
         <Route
-          path="/movimientos"
+          path="/historial"
           element={
             <ProtectedRoute>
               <RoleGuard allowedRoles={['ADMIN']}>
-                <Movimientos />
+                <Historial />
               </RoleGuard>
             </ProtectedRoute>
           }

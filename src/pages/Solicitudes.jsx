@@ -29,14 +29,13 @@ import {
   Grid,
   Tooltip,
   Autocomplete,
-  Tab,
-  Tabs,
   Fab,
   Radio,
   RadioGroup,
   FormControlLabel,
   FormLabel,
   Divider,
+  InputAdornment,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -51,6 +50,10 @@ import {
   LocalShipping as DeliverIcon,
   Construction as ToolIcon,
   Visibility as ViewIcon,
+  Cancel as CancelIcon,
+  Close as CloseIcon,
+  Search as SearchIcon,
+  FilterList as FilterIcon,
 } from '@mui/icons-material';
 import Navbar from '../components/Navbar';
 import { supabase } from '../lib/supabase';
@@ -60,12 +63,6 @@ const ZONAS = {
   TALLER: 'TALLER',
   INSTALACIONES: 'INSTALACIONES',
   MANTENIMIENTO: 'MANTENIMIENTO'
-};
-
-const TIPOS_HERRAMIENTA = {
-  DE_MANO: 'DE_MANO',
-  INSUMO: 'INSUMO',
-  MAQUINA: 'MAQUINA'
 };
 
 const PRIORIDADES = {
@@ -89,7 +86,15 @@ export default function Solicitudes() {
   const [openAdminDialog, setOpenAdminDialog] = useState(false);
   const [openViewDialog, setOpenViewDialog] = useState(false);
   const [selectedSolicitud, setSelectedSolicitud] = useState(null);
-  const [tabValue, setTabValue] = useState(0);
+  const [filtroActivo, setFiltroActivo] = useState('PENDIENTE');
+  
+  // Filtros adicionales
+  const [filtros, setFiltros] = useState({
+    busqueda: '',
+    tipo: '',
+    zona: '',
+    prioridad: ''
+  });
   
   // Formulario de nueva solicitud
   const [formData, setFormData] = useState({
@@ -99,7 +104,6 @@ export default function Solicitudes() {
     
     // Campos para nueva herramienta
     nombre_herramienta: '',
-    tipo_herramienta: '',
     descripcion_uso: '',
     marca: '',
     
@@ -116,7 +120,8 @@ export default function Solicitudes() {
     respuesta: '',
     crear_herramienta: false,
     nuevo_codigo: '',
-    nueva_descripcion: ''
+    nueva_descripcion: '',
+    nuevo_estado_herramienta: 'BIEN'
   });
 
   const [error, setError] = useState('');
@@ -173,9 +178,13 @@ export default function Solicitudes() {
 
   const cargarHerramientasPorZona = async (zona) => {
     try {
-      // Usar la función SQL creada para obtener herramientas en mal estado por zona
+      // Consulta directa para obtener herramientas en mal estado por zona
       const { data, error } = await supabase
-        .rpc('get_herramientas_mal_estado_por_zona', { zona_param: zona });
+        .from('herramientas')
+        .select('id, codigo, nombre, estado, zona')
+        .eq('zona', zona)
+        .in('estado', ['MAL', 'REGULAR', 'FALTANTE', 'ROTA'])
+        .order('codigo');
 
       if (error) {
         console.error('Error al cargar herramientas por zona:', error);
@@ -196,7 +205,6 @@ export default function Solicitudes() {
       zona: '',
       prioridad: 'NECESARIA',
       nombre_herramienta: '',
-      tipo_herramienta: '',
       descripcion_uso: '',
       marca: '',
       herramienta_id: null,
@@ -219,7 +227,8 @@ export default function Solicitudes() {
       respuesta: '',
       crear_herramienta: false,
       nuevo_codigo: '',
-      nueva_descripcion: ''
+      nueva_descripcion: '',
+      nuevo_estado_herramienta: 'BIEN'
     });
     setOpenAdminDialog(true);
   };
@@ -241,7 +250,7 @@ export default function Solicitudes() {
   };
 
   const validarFormulario = () => {
-    const { tipo_solicitud, zona, prioridad, nombre_herramienta, tipo_herramienta, descripcion_uso, herramienta_id, falla } = formData;
+    const { tipo_solicitud, zona, prioridad, nombre_herramienta, descripcion_uso, herramienta_id, falla } = formData;
 
     // Validaciones comunes
     if (!zona || !prioridad) {
@@ -250,8 +259,8 @@ export default function Solicitudes() {
 
     // Validaciones específicas por tipo
     if (tipo_solicitud === TIPOS_SOLICITUD.NUEVA) {
-      if (!nombre_herramienta || !tipo_herramienta || !descripcion_uso) {
-        return 'Complete nombre, tipo y descripción de uso para nueva herramienta';
+      if (!nombre_herramienta || !descripcion_uso) {
+        return 'Complete nombre y descripción de uso para nueva herramienta';
       }
     } else if (tipo_solicitud === TIPOS_SOLICITUD.REPARACION || tipo_solicitud === TIPOS_SOLICITUD.CAMBIO) {
       if (!herramienta_id) {
@@ -292,7 +301,6 @@ export default function Solicitudes() {
       // Campos específicos según tipo de solicitud
       if (formData.tipo_solicitud === TIPOS_SOLICITUD.NUEVA) {
         solicitudData.herramienta_nueva_nombre = formData.nombre_herramienta;
-        solicitudData.herramienta_nueva_tipo = formData.tipo_herramienta;
         solicitudData.descripcion_uso = formData.descripcion_uso;
         solicitudData.marca = formData.marca || null;
         solicitudData.motivo = `Nueva herramienta: ${formData.nombre_herramienta}`;
@@ -360,6 +368,35 @@ export default function Solicitudes() {
     }
   };
 
+  const handleCancelSolicitud = async () => {
+    if (!window.confirm('¿Está seguro de que desea cancelar esta solicitud? Esta acción no se puede deshacer.')) {
+      return;
+    }
+
+    try {
+      setError('');
+      setSuccess('');
+
+      const { error: updateError } = await supabase
+        .from('solicitudes')
+        .update({ 
+          estado: 'CANCELADA'
+        })
+        .eq('id', selectedSolicitud.id)
+        .eq('solicitado_por', currentUser.id) // Solo permitir cancelar propias solicitudes
+        .eq('estado', 'PENDIENTE'); // Solo cancelar si está pendiente
+
+      if (updateError) throw updateError;
+
+      setSuccess('Solicitud cancelada correctamente');
+      handleCloseViewDialog();
+      cargarDatos();
+    } catch (err) {
+      console.error('Error al cancelar solicitud:', err);
+      setError('Error al cancelar la solicitud: ' + err.message);
+    }
+  };
+
   const procesarAprobacion = async () => {
     const { tipo } = selectedSolicitud;
 
@@ -368,7 +405,6 @@ export default function Solicitudes() {
       const herramientaData = {
         codigo: adminResponse.nuevo_codigo,
         nombre: selectedSolicitud.herramienta_nueva_nombre,
-        tipo: selectedSolicitud.herramienta_nueva_tipo,
         zona: selectedSolicitud.zona,
         cantidad_total: 1,
         cantidad_disponible: 0,
@@ -392,7 +428,6 @@ export default function Solicitudes() {
       const herramientaData = {
         codigo: adminResponse.nuevo_codigo,
         nombre: herramientaOriginal.nombre,
-        tipo: herramientaOriginal.tipo || 'DE_MANO',
         zona: selectedSolicitud.zona,
         cantidad_total: 1,
         cantidad_disponible: 0,
@@ -416,12 +451,39 @@ export default function Solicitudes() {
         .from('herramientas')
         .update({ 
           estado: 'FALTANTE',
-          puntuacion_estado: 1,
-          updated_at: new Date().toISOString()
+          puntuacion_estado: 1
         })
         .eq('id', selectedSolicitud.herramienta_id);
+    } else if (tipo === TIPOS_SOLICITUD.REPARACION) {
+      // Para reparaciones, actualizar el estado de la herramienta
+      let nuevoPuntuacion;
+      switch (adminResponse.nuevo_estado_herramienta) {
+        case 'BIEN':
+          nuevoPuntuacion = 10;
+          break;
+        case 'REGULAR':
+          nuevoPuntuacion = 7;
+          break;
+        case 'MAL':
+          nuevoPuntuacion = 4;
+          break;
+        default:
+          nuevoPuntuacion = 10;
+      }
+      
+      const { error: updateError } = await supabase
+        .from('herramientas')
+        .update({ 
+          estado: adminResponse.nuevo_estado_herramienta,
+          puntuacion_estado: nuevoPuntuacion
+        })
+        .eq('id', selectedSolicitud.herramienta_id);
+
+      if (updateError) {
+        console.error('Error al actualizar herramienta reparada:', updateError);
+        throw new Error('Error al actualizar el estado de la herramienta');
+      }
     }
-    // Para reparaciones, el estado se actualiza automáticamente por el trigger
   };
 
   const getPrioridadInfo = (valor) => {
@@ -434,6 +496,7 @@ export default function Solicitudes() {
       case 'PENDIENTE': return 'warning';
       case 'APROBADA': return 'success';
       case 'RECHAZADA': return 'error';
+      case 'CANCELADA': return 'default';
       default: return 'default';
     }
   };
@@ -466,14 +529,67 @@ export default function Solicitudes() {
   const solicitudesPendientes = filteredSolicitudes.filter(s => s.estado === 'PENDIENTE');
   const solicitudesAprobadas = filteredSolicitudes.filter(s => s.estado === 'APROBADA');
   const solicitudesRechazadas = filteredSolicitudes.filter(s => s.estado === 'RECHAZADA');
+  const solicitudesCanceladas = filteredSolicitudes.filter(s => s.estado === 'CANCELADA');
 
-  const getSolicitudesByTab = () => {
-    switch (tabValue) {
-      case 0: return solicitudesPendientes;
-      case 1: return solicitudesAprobadas;
-      case 2: return solicitudesRechazadas;
-      default: return filteredSolicitudes;
+  const getSolicitudesFiltradas = () => {
+    // Primero filtrar por estado (tarjetas)
+    let solicitudesFiltradas;
+    switch (filtroActivo) {
+      case 'PENDIENTE': solicitudesFiltradas = solicitudesPendientes; break;
+      case 'APROBADA': solicitudesFiltradas = solicitudesAprobadas; break;
+      case 'RECHAZADA': solicitudesFiltradas = solicitudesRechazadas; break;
+      case 'CANCELADA': solicitudesFiltradas = solicitudesCanceladas; break;
+      default: solicitudesFiltradas = filteredSolicitudes;
     }
+
+    // Aplicar filtros adicionales
+    return solicitudesFiltradas.filter(solicitud => {
+      // Filtro por búsqueda (nombre de herramienta o motivo)
+      if (filtros.busqueda) {
+        const busqueda = filtros.busqueda.toLowerCase();
+        const nombre = solicitud.tipo === TIPOS_SOLICITUD.NUEVA 
+          ? solicitud.herramienta_nueva_nombre?.toLowerCase() || ''
+          : solicitud.herramientas?.nombre?.toLowerCase() || '';
+        const motivo = solicitud.motivo?.toLowerCase() || '';
+        const codigo = solicitud.herramientas?.codigo?.toLowerCase() || '';
+        
+        if (!nombre.includes(busqueda) && !motivo.includes(busqueda) && !codigo.includes(busqueda)) {
+          return false;
+        }
+      }
+      
+      // Filtro por tipo
+      if (filtros.tipo && solicitud.tipo !== filtros.tipo) {
+        return false;
+      }
+      
+      // Filtro por zona
+      if (filtros.zona && solicitud.zona !== filtros.zona) {
+        return false;
+      }
+      
+      // Filtro por prioridad
+      if (filtros.prioridad && solicitud.prioridad !== parseInt(filtros.prioridad)) {
+        return false;
+      }
+      
+      return true;
+    });
+  };
+
+  const limpiarFiltros = () => {
+    setFiltros({
+      busqueda: '',
+      tipo: '',
+      zona: '',
+      prioridad: ''
+    });
+  };
+
+  const cambiarFiltroActivo = (nuevoFiltro) => {
+    setFiltroActivo(nuevoFiltro);
+    // Opcionalmente limpiar los filtros adicionales al cambiar de categoría
+    // limpiarFiltros();
   };
 
   if (loading) {
@@ -509,10 +625,106 @@ export default function Solicitudes() {
           </Alert>
         )}
 
-        {/* Estadísticas */}
+        {/* Filtros */}
+        <Paper sx={{ p: 3, mb: 4 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+            <FilterIcon color="primary" />
+            <Typography variant="h6">Filtros</Typography>
+            {(filtros.busqueda || filtros.tipo || filtros.zona || filtros.prioridad) && (
+              <Button 
+                size="small" 
+                onClick={limpiarFiltros}
+                sx={{ ml: 'auto' }}
+              >
+                Limpiar filtros
+              </Button>
+            )}
+          </Box>
+          
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="Buscar por nombre o código..."
+                value={filtros.busqueda}
+                onChange={(e) => setFiltros({ ...filtros, busqueda: e.target.value })}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon color="action" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Grid>
+            
+            <Grid item xs={12} sm={4} md={2.67}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Tipo</InputLabel>
+                <Select
+                  value={filtros.tipo}
+                  label="Tipo"
+                  onChange={(e) => setFiltros({ ...filtros, tipo: e.target.value })}
+                >
+                  <MenuItem value="">Todos</MenuItem>
+                  <MenuItem value={TIPOS_SOLICITUD.NUEVA}>Nueva Herramienta</MenuItem>
+                  <MenuItem value={TIPOS_SOLICITUD.REPARACION}>Reparación</MenuItem>
+                  <MenuItem value={TIPOS_SOLICITUD.CAMBIO}>Cambio</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12} sm={4} md={2.67}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Zona</InputLabel>
+                <Select
+                  value={filtros.zona}
+                  label="Zona"
+                  onChange={(e) => setFiltros({ ...filtros, zona: e.target.value })}
+                >
+                  <MenuItem value="">Todas</MenuItem>
+                  <MenuItem value={ZONAS.TALLER}>Taller</MenuItem>
+                  <MenuItem value={ZONAS.INSTALACIONES}>Instalaciones</MenuItem>
+                  <MenuItem value={ZONAS.MANTENIMIENTO}>Mantenimiento</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={12} sm={4} md={2.67}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Prioridad</InputLabel>
+                <Select
+                  value={filtros.prioridad}
+                  label="Prioridad"
+                  onChange={(e) => setFiltros({ ...filtros, prioridad: e.target.value })}
+                >
+                  <MenuItem value="">Todas</MenuItem>
+                  <MenuItem value="3">Urgente</MenuItem>
+                  <MenuItem value="2">Necesaria</MenuItem>
+                  <MenuItem value="1">Útil</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        {/* Estadísticas - Cards clicables para filtrar */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} sm={4}>
-            <Card>
+          <Grid item xs={12} sm={3}>
+            <Card 
+              sx={{ 
+                cursor: 'pointer',
+                border: filtroActivo === 'PENDIENTE' ? 2 : 0,
+                borderColor: 'warning.main',
+                transition: 'all 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: 3
+                }
+              }}
+              onClick={() => cambiarFiltroActivo('PENDIENTE')}
+            >
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   <WarningIcon color="warning" sx={{ fontSize: 40 }} />
@@ -528,8 +740,20 @@ export default function Solicitudes() {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} sm={4}>
-            <Card>
+          <Grid item xs={12} sm={3}>
+            <Card 
+              sx={{ 
+                cursor: 'pointer',
+                border: filtroActivo === 'APROBADA' ? 2 : 0,
+                borderColor: 'success.main',
+                transition: 'all 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: 3
+                }
+              }}
+              onClick={() => cambiarFiltroActivo('APROBADA')}
+            >
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   <CompleteIcon color="success" sx={{ fontSize: 40 }} />
@@ -545,8 +769,20 @@ export default function Solicitudes() {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} sm={4}>
-            <Card>
+          <Grid item xs={12} sm={3}>
+            <Card 
+              sx={{ 
+                cursor: 'pointer',
+                border: filtroActivo === 'RECHAZADA' ? 2 : 0,
+                borderColor: 'error.main',
+                transition: 'all 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: 3
+                }
+              }}
+              onClick={() => cambiarFiltroActivo('RECHAZADA')}
+            >
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   <RejectIcon color="error" sx={{ fontSize: 40 }} />
@@ -562,20 +798,55 @@ export default function Solicitudes() {
               </CardContent>
             </Card>
           </Grid>
+          <Grid item xs={12} sm={3}>
+            <Card 
+              sx={{ 
+                cursor: 'pointer',
+                border: filtroActivo === 'CANCELADA' ? 2 : 0,
+                borderColor: 'grey.500',
+                transition: 'all 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: 3
+                }
+              }}
+              onClick={() => cambiarFiltroActivo('CANCELADA')}
+            >
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <CancelIcon color="disabled" sx={{ fontSize: 40 }} />
+                  <Box>
+                    <Typography variant="h4" component="div">
+                      {solicitudesCanceladas.length}
+                    </Typography>
+                    <Typography color="text.secondary">
+                      Canceladas
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
         </Grid>
 
-        {/* Tabs */}
-        <Paper sx={{ mb: 3 }}>
-          <Tabs
-            value={tabValue}
-            onChange={(e, newValue) => setTabValue(newValue)}
-            indicatorColor="primary"
-            textColor="primary"
-          >
-            <Tab label={`Pendientes (${solicitudesPendientes.length})`} />
-            <Tab label={`Aprobadas (${solicitudesAprobadas.length})`} />
-            <Tab label={`Rechazadas (${solicitudesRechazadas.length})`} />
-          </Tabs>
+        {/* Título de la sección filtrada */}
+        <Paper sx={{ mb: 3, p: 2 }}>
+          <Typography variant="h6">
+            {filtroActivo === 'PENDIENTE' && `Solicitudes Pendientes (${getSolicitudesFiltradas().length})`}
+            {filtroActivo === 'APROBADA' && `Solicitudes Aprobadas (${getSolicitudesFiltradas().length})`}
+            {filtroActivo === 'RECHAZADA' && `Solicitudes Rechazadas (${getSolicitudesFiltradas().length})`}
+            {filtroActivo === 'CANCELADA' && `Solicitudes Canceladas (${getSolicitudesFiltradas().length})`}
+          </Typography>
+          {(filtros.busqueda || filtros.tipo || filtros.zona || filtros.prioridad) && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              {getSolicitudesFiltradas().length} de {' '}
+              {filtroActivo === 'PENDIENTE' && solicitudesPendientes.length}
+              {filtroActivo === 'APROBADA' && solicitudesAprobadas.length}
+              {filtroActivo === 'RECHAZADA' && solicitudesRechazadas.length}
+              {filtroActivo === 'CANCELADA' && solicitudesCanceladas.length}
+              {' '}resultados con filtros aplicados
+            </Typography>
+          )}
         </Paper>
 
         {/* Tabla de solicitudes */}
@@ -593,7 +864,7 @@ export default function Solicitudes() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {getSolicitudesByTab().length === 0 ? (
+              {getSolicitudesFiltradas().length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} align="center">
                     <Typography variant="body2" color="text.secondary">
@@ -602,7 +873,7 @@ export default function Solicitudes() {
                   </TableCell>
                 </TableRow>
               ) : (
-                getSolicitudesByTab().map((solicitud) => (
+                getSolicitudesFiltradas().map((solicitud) => (
                   <TableRow 
                     key={solicitud.id}
                     onClick={() => handleOpenViewDialog(solicitud)}
@@ -663,19 +934,31 @@ export default function Solicitudes() {
           </Table>
         </TableContainer>
 
-        {/* FAB para crear solicitud */}
-        <Fab
-          color="primary"
-          aria-label="add"
-          sx={{ position: 'fixed', bottom: 16, right: 16 }}
-          onClick={handleOpenDialog}
-        >
-          <AddIcon />
-        </Fab>
+        {/* FAB para crear solicitud - Solo técnicos */}
+        {currentUser?.role === 'TECNICO' && (
+          <Fab
+            color="primary"
+            aria-label="add"
+            sx={{ position: 'fixed', bottom: 16, right: 16 }}
+            onClick={handleOpenDialog}
+          >
+            <AddIcon />
+          </Fab>
+        )}
 
         {/* Dialog para crear solicitud */}
         <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-          <DialogTitle>Nueva Solicitud</DialogTitle>
+          <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pr: 1 }}>
+            Nueva Solicitud
+            <IconButton
+              edge="end"
+              color="inherit"
+              onClick={handleCloseDialog}
+              aria-label="close"
+            >
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
           <DialogContent>
             <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
               
@@ -729,31 +1012,13 @@ export default function Solicitudes() {
               {formData.tipo_solicitud === TIPOS_SOLICITUD.NUEVA && (
                 <>
                   <Divider>Nueva Herramienta</Divider>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        fullWidth
-                        required
-                        label="Nombre"
-                        value={formData.nombre_herramienta}
-                        onChange={(e) => setFormData({ ...formData, nombre_herramienta: e.target.value })}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6}>
-                      <FormControl fullWidth required>
-                        <InputLabel>Tipo</InputLabel>
-                        <Select
-                          value={formData.tipo_herramienta}
-                          label="Tipo"
-                          onChange={(e) => setFormData({ ...formData, tipo_herramienta: e.target.value })}
-                        >
-                          <MenuItem value={TIPOS_HERRAMIENTA.DE_MANO}>De Mano</MenuItem>
-                          <MenuItem value={TIPOS_HERRAMIENTA.INSUMO}>Insumo</MenuItem>
-                          <MenuItem value={TIPOS_HERRAMIENTA.MAQUINA}>Máquina</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                  </Grid>
+                  <TextField
+                    fullWidth
+                    required
+                    label="Nombre"
+                    value={formData.nombre_herramienta}
+                    onChange={(e) => setFormData({ ...formData, nombre_herramienta: e.target.value })}
+                  />
                   <TextField
                     fullWidth
                     required
@@ -827,7 +1092,20 @@ export default function Solicitudes() {
             </Box>
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseDialog}>Cancelar</Button>
+            <Button 
+              onClick={handleCloseDialog}
+              variant="outlined"
+              sx={{ 
+                borderColor: 'grey.400',
+                color: 'grey.700',
+                '&:hover': {
+                  borderColor: 'grey.600',
+                  backgroundColor: 'grey.50'
+                }
+              }}
+            >
+              Cancelar
+            </Button>
             <Button onClick={handleSubmitSolicitud} variant="contained">
               Crear Solicitud
             </Button>
@@ -836,7 +1114,17 @@ export default function Solicitudes() {
 
         {/* Dialog para ver detalles */}
         <Dialog open={openViewDialog} onClose={handleCloseViewDialog} maxWidth="sm" fullWidth>
-          <DialogTitle>Detalles de Solicitud</DialogTitle>
+          <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pr: 1 }}>
+            Detalles de Solicitud
+            <IconButton
+              edge="end"
+              color="inherit"
+              onClick={handleCloseViewDialog}
+              aria-label="close"
+            >
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
           <DialogContent>
             {selectedSolicitud && (
               <Box sx={{ pt: 2 }}>
@@ -912,29 +1200,35 @@ export default function Solicitudes() {
             )}
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseViewDialog}>Cerrar</Button>
+            <Button 
+              onClick={handleCloseViewDialog}
+              variant="outlined"
+              sx={{ 
+                borderColor: 'grey.400',
+                color: 'grey.700',
+                '&:hover': {
+                  borderColor: 'grey.600',
+                  backgroundColor: 'grey.50'
+                }
+              }}
+            >
+              Cerrar
+            </Button>
+            {/* Botón para cancelar solicitud - Solo técnicos en sus propias solicitudes pendientes */}
+            {currentUser?.role === 'TECNICO' && 
+             selectedSolicitud?.estado === 'PENDIENTE' && 
+             selectedSolicitud?.solicitado_por === currentUser?.id && (
+              <Button
+                onClick={handleCancelSolicitud}
+                variant="outlined"
+                color="error"
+                startIcon={<CancelIcon />}
+              >
+                Cancelar Solicitud
+              </Button>
+            )}
             {currentUser?.role === 'ADMIN' && selectedSolicitud?.estado === 'PENDIENTE' && (
               <>
-                {/* <Button 
-                  onClick={() => {
-                    handleCloseViewDialog();
-                    handleOpenAdminDialog(selectedSolicitud, 'PENDIENTE');
-                  }}
-                  variant="outlined"
-                  color="warning"
-                >
-                  Mantener
-                </Button> */}
-                  {/* <Button 
-                    onClick={() => {
-                      handleCloseViewDialog();
-                      handleOpenAdminDialog(selectedSolicitud, 'RECHAZADA');
-                    }}
-                    variant="contained"
-                    color="error"
-                  >
-                    Rechazar
-                  </Button> */}
                 <Button 
                   onClick={() => {
                     handleCloseViewDialog();
@@ -943,7 +1237,7 @@ export default function Solicitudes() {
                   variant="contained"
                   color="success"
                 >
-                  Termianar solicitud
+                  Terminar solicitud
                 </Button>
               </>
             )}
@@ -952,7 +1246,17 @@ export default function Solicitudes() {
 
         {/* Dialog para respuesta admin */}
         <Dialog open={openAdminDialog} onClose={handleCloseAdminDialog} maxWidth="sm" fullWidth>
-          <DialogTitle>Procesar Solicitud</DialogTitle>
+          <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pr: 1 }}>
+            Procesar Solicitud
+            <IconButton
+              edge="end"
+              color="inherit"
+              onClick={handleCloseAdminDialog}
+              aria-label="close"
+            >
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
           <DialogContent>
             {selectedSolicitud && (
               <Box sx={{ pt: 2 }}>
@@ -983,23 +1287,40 @@ export default function Solicitudes() {
 
                 {adminResponse.accion === 'APROBADA' && (
                   <>
-                    <FormControlLabel
-                      control={
-                        <input
-                          type="checkbox"
-                          checked={adminResponse.crear_herramienta}
-                          onChange={(e) => setAdminResponse({ ...adminResponse, crear_herramienta: e.target.checked })}
-                        />
-                      }
-                      label={
-                        selectedSolicitud.tipo === TIPOS_SOLICITUD.NUEVA 
-                          ? "Crear nueva herramienta en el sistema"
-                          : selectedSolicitud.tipo === TIPOS_SOLICITUD.CAMBIO
-                          ? "Crear herramienta de reemplazo"
-                          : "Marcar herramienta como reparada"
-                      }
-                      sx={{ mb: 2 }}
-                    />
+                    {selectedSolicitud.tipo === TIPOS_SOLICITUD.REPARACION && (
+                      <>
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                          <InputLabel>Nuevo estado de la herramienta</InputLabel>
+                          <Select
+                            value={adminResponse.nuevo_estado_herramienta || 'BIEN'}
+                            label="Nuevo estado de la herramienta"
+                            onChange={(e) => setAdminResponse({ ...adminResponse, nuevo_estado_herramienta: e.target.value })}
+                          >
+                            <MenuItem value="BIEN">BIEN</MenuItem>
+                            <MenuItem value="REGULAR">REGULAR</MenuItem>
+                            <MenuItem value="MAL">MAL</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </>
+                    )}
+                    
+                    {(selectedSolicitud.tipo === TIPOS_SOLICITUD.NUEVA || selectedSolicitud.tipo === TIPOS_SOLICITUD.CAMBIO) && (
+                      <FormControlLabel
+                        control={
+                          <input
+                            type="checkbox"
+                            checked={adminResponse.crear_herramienta}
+                            onChange={(e) => setAdminResponse({ ...adminResponse, crear_herramienta: e.target.checked })}
+                          />
+                        }
+                        label={
+                          selectedSolicitud.tipo === TIPOS_SOLICITUD.NUEVA 
+                            ? "Crear nueva herramienta en el sistema"
+                            : "Crear herramienta de reemplazo"
+                        }
+                        sx={{ mb: 2 }}
+                      />
+                    )}
 
                     {adminResponse.crear_herramienta && (selectedSolicitud.tipo === TIPOS_SOLICITUD.NUEVA || selectedSolicitud.tipo === TIPOS_SOLICITUD.CAMBIO) && (
                       <>
@@ -1040,7 +1361,20 @@ export default function Solicitudes() {
             )}
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseAdminDialog}>Cancelar</Button>
+            <Button 
+              onClick={handleCloseAdminDialog}
+              variant="outlined"
+              sx={{ 
+                borderColor: 'grey.400',
+                color: 'grey.700',
+                '&:hover': {
+                  borderColor: 'grey.600',
+                  backgroundColor: 'grey.50'
+                }
+              }}
+            >
+              Cancelar
+            </Button>
             <Button 
               onClick={handleAdminResponse} 
               variant="contained"

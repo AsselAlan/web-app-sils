@@ -79,11 +79,19 @@ export default function Admin() {
     respuesta: '',
     crear_herramienta: false,
     nuevo_codigo: '',
-    nueva_descripcion: ''
+    nueva_descripcion: '',
+    nuevo_estado_herramienta: 'BIEN' // Para reparaciones
   });
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  
+  // Filtros
+  const [filtros, setFiltros] = useState({
+    zona: '',
+    tipo: '',
+    prioridad: ''
+  });
 
   useEffect(() => {
     cargarDatos();
@@ -134,7 +142,8 @@ export default function Admin() {
       respuesta: '',
       crear_herramienta: false,
       nuevo_codigo: '',
-      nueva_descripcion: ''
+      nueva_descripcion: '',
+      nuevo_estado_herramienta: 'BIEN'
     });
     setOpenAdminDialog(true);
   };
@@ -193,6 +202,26 @@ export default function Admin() {
     }
   };
 
+  const procesarReparacion = async (herramientaId, nuevoEstado) => {
+    console.log('=== ACTUALIZANDO ESTADO DE HERRAMIENTA ===');
+    console.log('ID:', herramientaId, 'Nuevo Estado:', nuevoEstado);
+
+    const { error } = await supabase
+      .from('herramientas')
+      .update({ 
+        estado: nuevoEstado,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', herramientaId);
+
+    if (error) {
+      console.error('Error al actualizar herramienta:', error);
+      throw new Error(`Error al actualizar el estado de la herramienta: ${error.message}`);
+    }
+
+    console.log('✅ ESTADO ACTUALIZADO EXITOSAMENTE');
+  };
+
   const procesarAprobacion = async () => {
     const { tipo } = selectedSolicitud;
 
@@ -206,7 +235,6 @@ export default function Admin() {
         cantidad_total: 1,
         cantidad_disponible: 0,
         estado: 'BIEN',
-        puntuacion_estado: 10,
         descripcion: adminResponse.nueva_descripcion || selectedSolicitud.descripcion_uso,
         created_by: currentUser.id
       };
@@ -230,7 +258,6 @@ export default function Admin() {
         cantidad_total: 1,
         cantidad_disponible: 0,
         estado: 'BIEN',
-        puntuacion_estado: 10,
         descripcion: adminResponse.nueva_descripcion || `Reemplazo de ${herramientaOriginal.codigo}`,
         created_by: currentUser.id
       };
@@ -249,20 +276,12 @@ export default function Admin() {
         .from('herramientas')
         .update({ 
           estado: 'FALTANTE',
-          puntuacion_estado: 1,
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedSolicitud.herramienta_id);
     } else if (tipo === TIPOS_SOLICITUD.REPARACION && selectedSolicitud.herramienta_id) {
-      // Para reparaciones, actualizar el estado de la herramienta
-      await supabase
-        .from('herramientas')
-        .update({ 
-          estado: 'BIEN',
-          puntuacion_estado: 10,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', selectedSolicitud.herramienta_id);
+      // Para reparaciones, usar función especializada
+      await procesarReparacion(selectedSolicitud.herramienta_id, adminResponse.nuevo_estado_herramienta);
     }
   };
 
@@ -298,10 +317,21 @@ export default function Admin() {
     }
   };
 
-  // Separar por estado
-  const solicitudesPendientes = solicitudes.filter(s => s.estado === 'PENDIENTE');
-  const solicitudesAprobadas = solicitudes.filter(s => s.estado === 'APROBADA');
-  const solicitudesRechazadas = solicitudes.filter(s => s.estado === 'RECHAZADA');
+  // Función para aplicar filtros
+  const aplicarFiltros = (solicitudesList) => {
+    return solicitudesList.filter(solicitud => {
+      const cumpleZona = !filtros.zona || solicitud.zona === filtros.zona;
+      const cumpleTipo = !filtros.tipo || solicitud.tipo === filtros.tipo;
+      const cumplePrioridad = !filtros.prioridad || getPrioridadInfo(solicitud.prioridad).texto === filtros.prioridad;
+      
+      return cumpleZona && cumpleTipo && cumplePrioridad;
+    });
+  };
+
+  // Separar por estado con filtros aplicados
+  const solicitudesPendientes = aplicarFiltros(solicitudes.filter(s => s.estado === 'PENDIENTE'));
+  const solicitudesAprobadas = aplicarFiltros(solicitudes.filter(s => s.estado === 'APROBADA'));
+  const solicitudesRechazadas = aplicarFiltros(solicitudes.filter(s => s.estado === 'RECHAZADA'));
 
   const getSolicitudesByTab = () => {
     switch (tabValue) {
@@ -399,6 +429,69 @@ export default function Admin() {
             </Card>
           </Grid>
         </Grid>
+
+        {/* Filtros */}
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Filtros
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={4}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Zona</InputLabel>
+                <Select
+                  value={filtros.zona}
+                  onChange={(e) => setFiltros({ ...filtros, zona: e.target.value })}
+                  label="Zona"
+                >
+                  <MenuItem value="">Todas las zonas</MenuItem>
+                  <MenuItem value="MANTENIMIENTO">MANTENIMIENTO</MenuItem>
+                  <MenuItem value="TALLER">TALLER</MenuItem>
+                  <MenuItem value="INSTALACIONES">INSTALACIONES</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Tipo</InputLabel>
+                <Select
+                  value={filtros.tipo}
+                  onChange={(e) => setFiltros({ ...filtros, tipo: e.target.value })}
+                  label="Tipo"
+                >
+                  <MenuItem value="">Todos los tipos</MenuItem>
+                  <MenuItem value="NUEVA">Nueva Herramienta</MenuItem>
+                  <MenuItem value="REPARACION">Reparación</MenuItem>
+                  <MenuItem value="CAMBIO">Cambio</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Prioridad</InputLabel>
+                <Select
+                  value={filtros.prioridad}
+                  onChange={(e) => setFiltros({ ...filtros, prioridad: e.target.value })}
+                  label="Prioridad"
+                >
+                  <MenuItem value="">Todas las prioridades</MenuItem>
+                  <MenuItem value="URGENTE">URGENTE</MenuItem>
+                  <MenuItem value="NECESARIA">NECESARIA</MenuItem>
+                  <MenuItem value="UTIL">UTIL</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+          <Box sx={{ mt: 2 }}>
+            <Button 
+              variant="outlined" 
+              size="small" 
+              onClick={() => setFiltros({ zona: '', tipo: '', prioridad: '' })}
+            >
+              Limpiar Filtros
+            </Button>
+          </Box>
+        </Paper>
 
         {/* Tabs */}
         <Paper sx={{ mb: 3 }}>
@@ -631,10 +724,26 @@ export default function Admin() {
                           ? "Crear nueva herramienta en el sistema"
                           : selectedSolicitud.tipo === TIPOS_SOLICITUD.CAMBIO
                           ? "Crear herramienta de reemplazo"
-                          : "Marcar herramienta como reparada"
+                          : "Actualizar estado de la herramienta reparada"
                       }
                       sx={{ mb: 2 }}
                     />
+
+                    {/* Selector de estado para reparaciones */}
+                    {selectedSolicitud.tipo === TIPOS_SOLICITUD.REPARACION && (
+                      <FormControl fullWidth sx={{ mb: 2 }}>
+                        <InputLabel>Nuevo estado de la herramienta</InputLabel>
+                        <Select
+                          value={adminResponse.nuevo_estado_herramienta}
+                          onChange={(e) => setAdminResponse({ ...adminResponse, nuevo_estado_herramienta: e.target.value })}
+                          label="Nuevo estado de la herramienta"
+                        >
+                          <MenuItem value="BIEN">BIEN</MenuItem>
+                          <MenuItem value="REGULAR">REGULAR</MenuItem>
+                          <MenuItem value="MAL">MAL</MenuItem>
+                        </Select>
+                      </FormControl>
+                    )}
 
                     {adminResponse.crear_herramienta && (selectedSolicitud.tipo === TIPOS_SOLICITUD.NUEVA || selectedSolicitud.tipo === TIPOS_SOLICITUD.CAMBIO) && (
                       <>
